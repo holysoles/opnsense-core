@@ -65,6 +65,7 @@ chown -R unbound:unbound /var/unbound
 
 if [ -n "${DOMAIN}" ]; then
 	/usr/local/opnsense/scripts/dhcp/unbound_watcher.py --domain ${DOMAIN}
+	/usr/local/opnsense/scripts/dhcp/unbound_kea_watcher.py --domain ${DOMAIN}
 fi
 
 if [ -f /var/unbound/data/stats ]; then
