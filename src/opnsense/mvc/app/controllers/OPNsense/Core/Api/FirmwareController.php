@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (c) 2015-2023 Franco Fichtner <franco@opnsense.org>
+ * Copyright (c) 2015-2025 Franco Fichtner <franco@opnsense.org>
  * Copyright (c) 2015-2018 Deciso B.V.
  * All rights reserved.
  *
@@ -356,12 +356,15 @@ class FirmwareController extends ApiMutableModelControllerBase
         $version = (new SanitizeFilter())->sanitize($version, 'version');
 
         $backend = new Backend();
-        $html = trim($backend->configdRun(sprintf('firmware changelog html %s', $version)));
+        $html = trim($backend->configdpRun('firmware changelog html', [$version]));
+        $date = trim($backend->configdpRun('firmware changelog date', [$version]));
+
         if (!empty($html)) {
+            $response['version'] = $version;
             $response['status'] = 'ok';
             $response['html'] = $html;
+            $response['date'] = $date;
         }
-
 
         return $response;
     }
@@ -396,7 +399,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function licenseAction($package)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             // sanitize package name
@@ -418,7 +421,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function rebootAction()
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(sprintf("[Firmware] User %s executed a reboot", $this->getUserName()));
             $response['status'] = 'ok';
@@ -438,7 +441,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function poweroffAction()
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(sprintf("[Firmware] User %s executed a poweroff", $this->getUserName()));
             $response['status'] = 'ok';
@@ -458,7 +461,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function updateAction()
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(sprintf("[Firmware] User %s executed a firmware update", $this->getUserName()));
             $backend->configdRun('firmware flush');
@@ -479,7 +482,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function upgradeAction()
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(sprintf("[Firmware] User %s executed a firmware upgrade", $this->getUserName()));
             $backend->configdRun('firmware flush');
@@ -493,23 +496,43 @@ class FirmwareController extends ApiMutableModelControllerBase
     }
 
     /**
+     * run an audit in the backend
+     * @return array status
+     * @throws \Exception
+     */
+    private function auditHelper(string $audit): array
+    {
+        $backend = new Backend();
+        $response = [];
+
+        if ($this->request->isPost()) {
+            $response['status'] = 'ok';
+            $response['msg_uuid'] = trim($backend->configdRun("firmware $audit", true));
+        } else {
+            $response['status'] = 'failure';
+        }
+
+        return $response;
+    }
+
+    /**
+     * run a cleanup task
+     * @return array status
+     * @throws \Exception
+     */
+    public function cleanupAction()
+    {
+        return $this->auditHelper('cleanup');
+    }
+
+    /**
      * run a connection check
      * @return array status
      * @throws \Exception
      */
     public function connectionAction()
     {
-        $backend = new Backend();
-        $response = array();
-
-        if ($this->request->isPost()) {
-            $response['status'] = 'ok';
-            $response['msg_uuid'] = trim($backend->configdRun("firmware connection", true));
-        } else {
-            $response['status'] = 'failure';
-        }
-
-        return $response;
+        return $this->auditHelper('connection');
     }
 
     /**
@@ -519,17 +542,7 @@ class FirmwareController extends ApiMutableModelControllerBase
      */
     public function healthAction()
     {
-        $backend = new Backend();
-        $response = array();
-
-        if ($this->request->isPost()) {
-            $response['status'] = 'ok';
-            $response['msg_uuid'] = trim($backend->configdRun("firmware health", true));
-        } else {
-            $response['status'] = 'failure';
-        }
-
-        return $response;
+        return $this->auditHelper('health');
     }
 
     /*
@@ -539,18 +552,11 @@ class FirmwareController extends ApiMutableModelControllerBase
      */
     public function auditAction()
     {
-        $backend = new Backend();
-        $response = array();
-
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(sprintf("[Firmware] User %s executed a security audit", $this->getUserName()));
-            $response['status'] = 'ok';
-            $response['msg_uuid'] = trim($backend->configdRun("firmware audit", true));
-        } else {
-            $response['status'] = 'failure';
         }
 
-        return $response;
+        return $this->auditHelper('audit');
     }
 
     /**
@@ -562,7 +568,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function reinstallAction($pkg_name)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(
@@ -587,7 +593,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function syncPluginsAction()
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(sprintf("[Firmware] User %s executed a plugins sync", $this->getUserName()));
@@ -607,7 +613,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function resyncPluginsAction()
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $response['status'] = strtolower(trim($backend->configdRun('firmware resync')));
@@ -627,7 +633,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function installAction($pkg_name)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(
@@ -653,7 +659,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function removeAction($pkg_name)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(
@@ -680,7 +686,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function lockAction($pkg_name)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(
@@ -710,7 +716,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function unlockAction($pkg_name)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $this->getLogger('audit')->notice(
@@ -752,7 +758,7 @@ class FirmwareController extends ApiMutableModelControllerBase
     {
         $backend = new Backend();
         $result = array('status' => 'running');
-        $cmd_result = trim($backend->configdRun('firmware status') ?? '');
+        $cmd_result = trim($backend->configdRun('firmware status'));
 
         $result['log'] = $cmd_result;
 
@@ -775,11 +781,11 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function detailsAction($package)
     {
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         if ($this->request->isPost()) {
             $package = (new SanitizeFilter())->sanitize($package, 'pkgname');
-            $text = trim($backend->configdRun(sprintf('firmware details %s', $package)) ?? '');
+            $text = trim($backend->configdRun(sprintf('firmware details %s', $package)));
             if (!empty($text)) {
                 $response['details'] = $text;
             }
@@ -795,17 +801,17 @@ class FirmwareController extends ApiMutableModelControllerBase
     public function infoAction()
     {
         $config = Config::getInstance()->object();
-        $configPlugins = array();
+        $configPlugins = [];
         if (!empty($config->system->firmware->plugins)) {
             $configPlugins = explode(",", $config->system->firmware->plugins);
         }
 
-        $keys = array('name', 'version', 'comment', 'flatsize', 'locked', 'automatic', 'license', 'repository', 'origin');
+        $keys = ['name', 'version', 'comment', 'flatsize', 'locked', 'automatic', 'license', 'repository', 'origin'];
         $backend = new Backend();
-        $response = array();
+        $response = [];
 
         $version = explode(' ', trim(shell_exec('opnsense-version -nv') ?? ''));
-        foreach (array('product_id' => 0, 'product_version' => 1) as $result => $index) {
+        foreach (['product_id' => 0, 'product_version' => 1] as $result => $index) {
             $response[$result] = !empty($version[$index]) ? $version[$index] : 'unknown';
         }
 
@@ -835,7 +841,7 @@ class FirmwareController extends ApiMutableModelControllerBase
 
             foreach ($current as $line) {
                 $expanded = explode('|||', $line);
-                $translated = array();
+                $translated = [];
                 $index = 0;
                 if (count($expanded) != count($keys)) {
                     continue;
@@ -879,7 +885,7 @@ class FirmwareController extends ApiMutableModelControllerBase
             return strnatcasecmp($a, $b);
         });
 
-        $response['package'] = array();
+        $response['package'] = [];
         foreach ($packages as $package) {
             $response['package'][] = $package;
         }
@@ -905,9 +911,16 @@ class FirmwareController extends ApiMutableModelControllerBase
             );
         });
 
-        $response['plugin'] = array();
+        $response['plugin'] = [];
         foreach ($plugins as $plugin) {
-            $plugin['tier'] = isset($tiers[$plugin['name']]) ? $tiers[$plugin['name']] : gettext('N/A');
+            /* for any community repository, orphaned package or otherwise unknown force the lowest tier */
+            $plugin['tier'] = '4';
+
+            /* trusted repository handling */
+            if (in_array($plugin['repository'], ['OPNsense', 'SunnyValley']) && $plugin['provided'] == '1') {
+                $plugin['tier'] = $tiers[$plugin['name']];
+            }
+
             $response['plugin'][] = $plugin;
         }
 

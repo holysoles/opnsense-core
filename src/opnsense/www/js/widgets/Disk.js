@@ -62,10 +62,10 @@ export default class Disk extends BaseGaugeWidget {
         return $(`
             <div class="${this.id}-chart-container">
                 <div class="canvas-container">
-                    <canvas id="${this.id}-chart"></canvas>
+                    <canvas id="${this.id}-chart" style="display: inline-block"></canvas>
                 </div>
                 <div class="canvas-container">
-                    <canvas id="${this.id}-detailed-chart"></canvas>
+                    <canvas id="${this.id}-detailed-chart" style="display: inline-block"></canvas>
                 </div>
                 </div>
             </div>
@@ -130,6 +130,7 @@ export default class Disk extends BaseGaugeWidget {
                 },
                 indexAxis: 'y',
                 plugins: {
+                    colorschemes: false,
                     legend: {
                         display: false
                     },
@@ -152,7 +153,7 @@ export default class Disk extends BaseGaugeWidget {
     }
 
     async onWidgetTick() {
-        const data = await this.ajaxCall('/api/diagnostics/system/systemDisk');
+        const data = await this.ajaxCall('/api/diagnostics/system/system_disk');
         if (data.devices !== undefined) {
             let set = this.detailed_chart.config.data;
             let init = set.labels.length === 0;

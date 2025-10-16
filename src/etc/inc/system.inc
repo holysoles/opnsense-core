@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2016-2024 Franco Fichtner <franco@opnsense.org>
+ * Copyright (C) 2016-2025 Franco Fichtner <franco@opnsense.org>
  * Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
  * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
  * All rights reserved.
@@ -69,27 +69,36 @@ function system_sysctl_defaults()
 {
     global $config;
 
+    /* notes:
+     *  - always set 'default' so the backend can use it and the user can see it
+     *  - since this is a function the settings could be derived from confiugration
+     *    values or functions although in reality this is/was very rarely needed.
+     *  - 'description' and 'type' can be used to indicate persistence of these values
+     *    when in reality these are not available due to kernel modules unloaded or
+     *    compile time options unset (like debugging)
+     */
+
     return [
-        'debug.kassert.warn_only' => [ 'default' => '1', 'required' => true, 'description' => 'KASSERT triggers a panic (0) or just a warning (1)', 'type' => 'w' ],
-        'hw.ibrs_disable' => [ 'default' => '0' ],
-        'hw.ixl.enable_head_writeback' => [ 'default' => '0', 'required' => true ],
+        'debug.kassert.warn_only' => [ 'default' => '1', 'description' => 'KASSERT triggers a panic (0) or just a warning (1)', 'type' => 'w' ],
+        'hw.ixl.enable_head_writeback' => [ 'default' => '0' ],
         'hw.syscons.kbd_reboot' => [ 'default' => '0' ],
-        'hw.uart.console' => [ 'default' => 'io:0x3f8,br:' . system_console_speed(), 'type' => 't' ], /* XXX support comconsole_port if needed */
-        'hw.vtnet.csum_disable' => [ 'default' => '1', 'required' => true ],
-        'kern.coredump' => [ 'default' => '0', 'required' => true ],
+        'hw.vtnet.csum_disable' => [ 'default' => '1' ],
+        'kern.coredump' => [ 'default' => '0' ],
         'kern.ipc.maxsockbuf' => [ 'default' => '4262144' ],
+        'kern.msgbuf_show_timestamp' => [ 'default' => '1' ],
         'kern.randompid' => [ 'default' => '1' ],
-        'net.enc.in.ipsec_bpf_mask' => [ 'default' => '2', 'required' => true ], /* after processing */
-        'net.enc.in.ipsec_filter_mask' => [ 'default' => '2', 'required' => true ], /* after processing */
-        'net.enc.out.ipsec_bpf_mask' => [ 'default' => '1', 'required' => true ], /* before processing */
-        'net.enc.out.ipsec_filter_mask' => [ 'default' => '1', 'required' => true ], /* before processing */
-        'net.inet.icmp.drop_redirect' => [ 'default' => '1', 'required' => true ],
+        'net.enc.in.ipsec_bpf_mask' => [ 'default' => '2' ], /* after processing */
+        'net.enc.in.ipsec_filter_mask' => [ 'default' => '2' ], /* after processing */
+        'net.enc.out.ipsec_bpf_mask' => [ 'default' => '1' ], /* before processing */
+        'net.enc.out.ipsec_filter_mask' => [ 'default' => '1' ], /* before processing */
+        'net.inet.carp.senderr_demotion_factor' => [ 'default' => '0' ],
+        'net.inet.icmp.drop_redirect' => [ 'default' => '1' ],
         'net.inet.icmp.icmplim' => [ 'default' => '0' ],
         'net.inet.icmp.log_redirect' => [ 'default' => '0' ],
-        'net.inet.icmp.reply_from_interface' => [ 'default' => '1', 'required' => true ],
+        'net.inet.icmp.reply_from_interface' => [ 'default' => '1' ],
         'net.inet.ip.accept_sourceroute' => [ 'default' => '0' ],
-        'net.inet.ip.forwarding' => [ 'default' => '1', 'required' => true ],
-        'net.inet.ip.intr_queue_maxlen' => [ 'default' => '1000', 'required' => true ],
+        'net.inet.ip.forwarding' => [ 'default' => '1' ],
+        'net.inet.ip.intr_queue_maxlen' => [ 'default' => '1000' ],
         'net.inet.ip.portrange.first' => [ 'default' => '1024' ],
         'net.inet.ip.random_id' => [ 'default' => '1' ],
         'net.inet.ip.redirect' => [ 'default' => '0' ],
@@ -105,32 +114,31 @@ function system_sysctl_defaults()
         'net.inet.udp.blackhole' => [ 'default' => '1' ],
         'net.inet.udp.checksum' => [ 'default' => 1 ],
         'net.inet.udp.maxdgram' => [ 'default' => '57344' ],
-        'net.inet6.ip6.accept_rtadv' => [ 'default' => isset($config['system']['ipv6allow']) ? '1' : '0', 'required' => true ],
-        'net.inet6.ip6.forwarding' => [ 'default' => '1', 'required' => true ],
-        'net.inet6.ip6.intr_queue_maxlen' => [ 'default' => '1000', 'required' => true ],
+        'net.inet6.ip6.forwarding' => [ 'default' => '1' ],
+        'net.inet6.ip6.intr_queue_maxlen' => [ 'default' => '1000' ],
+        'net.inet6.ip6.log_cannot_forward' => [ 'default' => '0' ],
         'net.inet6.ip6.prefer_tempaddr' => [ 'default' => '0' ],
         'net.inet6.ip6.redirect' => [ 'default' => '0' ],
-        'net.inet6.ip6.rfc6204w3' => [ 'default' => isset($config['system']['ipv6allow']) ? '1' : '0', 'required' => true ],
+        'net.inet6.ip6.rfc6204w3' => [ 'default' => isset($config['system']['ipv6allow']) ? '1' : '0' ],
         'net.inet6.ip6.use_tempaddr' => [ 'default' => '0' ],
         'net.link.bridge.pfil_bridge' => [ 'default' => '0' ],
         'net.link.bridge.pfil_local_phys' => [ 'default' => '0' ],
         'net.link.bridge.pfil_member' => [ 'default' => '1' ],
         'net.link.bridge.pfil_onlyip' => [ 'default' => '0' ],
-        'net.link.ether.inet.log_arp_movements' => [ 'default' => isset($config['system']['sharednet']) ? '0' : '1', 'required' => true ],
-        'net.link.ether.inet.log_arp_wrong_iface' => [ 'default' => isset($config['system']['sharednet']) ? '0' : '1', 'required' => true ],
+        'net.link.ether.inet.log_arp_movements' => [ 'default' => isset($config['system']['sharednet']) ? '0' : '1' ],
+        'net.link.ether.inet.log_arp_wrong_iface' => [ 'default' => isset($config['system']['sharednet']) ? '0' : '1' ],
         'net.link.tap.user_open' => [ 'default' => '1' ],
-        'net.link.vlan.mtag_pcp' => [ 'default' => '1', 'required' => true ],
-        'net.local.dgram.maxdgram' => [ 'default' => '8192', 'required' => true ],
-        'net.pf.share_forward' => [ 'default' => !empty($config['system']['pf_share_forward']) ? '1' : '0', 'required' => true ],
-        'net.pf.share_forward6' => [ 'default' => !empty($config['system']['pf_share_forward']) ? '1' : '0', 'required' => true ],
-        'net.route.multipath' => [ 'default' => '0', 'required' => true ],
+        'net.link.vlan.mtag_pcp' => [ 'default' => '1' ],
+        'net.local.dgram.maxdgram' => [ 'default' => '8192' ],
+        'net.pf.share_forward' => [ 'default' => !empty($config['system']['pf_share_forward']) ? '1' : '0' ],
+        'net.pf.share_forward6' => [ 'default' => !empty($config['system']['pf_share_forward']) ? '1' : '0' ],
+        'net.route.multipath' => [ 'default' => '0' ],
         'security.bsd.see_other_gids' => [ 'default' => '0' ],
         'security.bsd.see_other_uids' => [ 'default' => '0' ],
         'vfs.read_max' => [ 'default' => '32' ],
-        'vfs.zfs.dirty_data_sync_percent' => [ 'default' => '5', 'required' => true ],
-        'vfs.zfs.txg.timeout' => [ 'default' => '90', 'required' => true ],
-        'vm.numa.disabled' => [ 'default' => '1', 'required' => true ],
-        'vm.pmap.pti' => [ 'default' => '1' ],
+        'vfs.zfs.dirty_data_sync_percent' => [ 'default' => '5' ],
+        'vfs.zfs.txg.timeout' => [ 'default' => '90' ],
+        'vm.numa.disabled' => [ 'default' => '1' ],
     ];
 }
 
@@ -139,19 +147,19 @@ function system_sysctl_get()
     $defaults = system_sysctl_defaults();
     $sysctls = [];
 
-    foreach ($defaults as $name => $info) {
+    foreach (array_keys($defaults) as $name) {
         /* compile list of required sysctls not necessarily present in config */
-        if (!empty($info['required'])) {
-            $sysctls[$name] = 'default';
-        }
+        $sysctls[$name] = '';
     }
 
     foreach (config_read_array('sysctl', 'item') as $tunable) {
+        /* get the user specified tunables from the configuration */
         $sysctls[$tunable['tunable']] = $tunable['value'];
     }
 
     foreach ($sysctls as $key => &$value) {
-        if ($value != 'default') {
+        /* keeping the now deprecated 'default' as a keyword for selecting defaults */
+        if ($value != 'default' && $value != '') {
             continue;
         }
 
@@ -230,11 +238,7 @@ function system_resolvconf_generate($verbose = false)
         $resolvconf .= "search {$result}\n";
     }
 
-    $tempfile = tempnam('/tmp', 'resolv.conf');
-    file_put_contents($tempfile, $resolvconf);
-    chmod($tempfile, 0644);
-
-    rename($tempfile, '/etc/resolv.conf');
+    file_safe('/etc/resolv.conf', $resolvconf);
 
     /* setup static routes for DNS servers as configured */
     foreach ($routes as $host => $gateway) {
@@ -257,6 +261,7 @@ function get_locale_list()
     $locales['cs_CZ'] = gettext('Czech');
     $locales['fr_FR'] = gettext('French');
     $locales['de_DE'] = gettext('German');
+    $locales['el_GR'] = gettext('Greek');
     $locales['it_IT'] = gettext('Italian');
     $locales['ja_JP'] = gettext('Japanese');
     $locales['ko_KR'] = gettext('Korean');
@@ -267,6 +272,7 @@ function get_locale_list()
     $locales['ru_RU'] = gettext('Russian');
     $locales['es_ES'] = gettext('Spanish');
     $locales['tr_TR'] = gettext('Turkish');
+    $locales['uk_UA'] = gettext('Ukranian');
     $locales['vi_VN'] = gettext('Vietnamese');
 
     if (!product::getInstance()->development()) {
@@ -275,22 +281,6 @@ function get_locale_list()
     }
 
     return $locales;
-}
-
-function get_country_codes()
-{
-    $dn_cc = array();
-
-    $iso3166_tab = '/usr/local/opnsense/contrib/tzdata/iso3166.tab';
-    if (file_exists($iso3166_tab)) {
-        $dn_cc_file = file($iso3166_tab);
-        foreach ($dn_cc_file as $line) {
-            if (preg_match('/^([A-Z][A-Z])\t(.*)$/', $line, $matches)) {
-                $dn_cc[$matches[1]] = trim($matches[2]);
-            }
-        }
-    }
-    return $dn_cc;
 }
 
 function get_zoneinfo()
@@ -318,16 +308,20 @@ function get_searchdomains()
     }
 
     if (!empty($syscfg['dnssearchdomain'])) {
-        if ($syscfg['dnssearchdomain'] == '.') {
-            /* pass root only */
-            return [$syscfg['dnssearchdomain']];
-        }
+        $dnssds = array_unique(explode(',', $syscfg['dnssearchdomain']));
 
-        /* add custom search entries after default domain before potential provider entries */
-        $master_list[] = $syscfg['dnssearchdomain'];
+        foreach ($dnssds as $dnssd) {
+            if ($dnssd == '.') {
+                /* pass root only but including other manually set domains as is */
+                return $dnssds;
+            }
+
+            /* add custom search entries after default domain before potential provider entries */
+            $master_list[] = $dnssd;
+        }
     }
 
-    if (isset($syscfg['dnsallowoverride'])) {
+    if (!empty($syscfg['dnsallowoverride'])) {
         /* return domains as required by configuration */
         $list = shell_safe('/usr/local/sbin/ifctl -sl');
         if (!empty($list)) {
@@ -361,17 +355,16 @@ function get_nameservers($interface = null, $with_gateway = false)
 
     if (!empty($interface)) {
         /* only acquire servers provided for this interface */
-        $realif = get_real_interface($interface);
-        $realifv6 = get_real_interface($interface, 'inet6');
-        $list = shell_safe('/usr/local/sbin/ifctl -4nli %s', $realif);
+        $devices = get_real_interface($interface, 'both');
+        $list = shell_safe('/usr/local/sbin/ifctl -4nli %s', reset($devices));
         if (!empty($list)) {
             $dns_lists[] = $list;
         }
-        $list = shell_safe('/usr/local/sbin/ifctl -6nli %s', $realifv6);
+        $list = shell_safe('/usr/local/sbin/ifctl -6nli %s', end($devices));
         if (!empty($list)) {
             $dns_lists[] = $list;
         }
-    } elseif (isset($syscfg['dnsallowoverride'])) {
+    } elseif (!empty($syscfg['dnsallowoverride'])) {
         /* return dynamic servers as required by configuration */
         $list = shell_safe('/usr/local/sbin/ifctl -nl');
         if (!empty($list)) {
@@ -379,12 +372,12 @@ function get_nameservers($interface = null, $with_gateway = false)
         }
     }
 
-    if (isset($syscfg['dnsallowoverride_exclude'])) {
+    if (!empty($syscfg['dnsallowoverride_exclude'])) {
         /* by design this only works on dynamic servers, not static ones */
         foreach (explode(',', $syscfg['dnsallowoverride_exclude']) as $intf) {
             if (isset($config['interfaces'][$intf])) {
-                $exclude_interfaces[] = get_real_interface($intf);
-                $exclude_interfaces[] = get_real_interface($intf, 'inet6');
+                $devices = get_real_interface($intf, 'both');
+                array_push($exclude_interfaces, ...$devices);
             }
         }
     }
@@ -664,8 +657,8 @@ function system_routing_configure($verbose = false, $interface_map = null, $moni
 
     $ifdetails = legacy_interfaces_details();
     $gateways = new \OPNsense\Routing\Gateways();
-    $down_gateways = isset($config['system']['gw_switch_default']) && $monitor !== 'ignore' ? return_down_gateways() : [];
     $routes = json_decode(configd_run('interface routes list -n json'), true) ?? [];
+    $down_gateways = [];
 
     foreach ($gateways->gatewaysIndexedByName() as $gateway) {
         /* check if we need to add a required interface route to the gateway (IPv4 only) */
@@ -683,7 +676,16 @@ function system_routing_configure($verbose = false, $interface_map = null, $moni
         system_interface_route($gateway, $routes);
     }
 
-    if (!empty($down_gateways)) {
+    if (isset($config['system']['gw_switch_default']) && $monitor !== 'ignore') {
+        foreach (return_gateways_status() as $gwname => $gwstatus) {
+            /* for clarity: this also matches 'force_down' */
+            if (strpos($gwstatus['status'], 'down') !== false) {
+                $down_gateways[] = $gwname;
+            }
+        }
+    }
+
+    if (count($down_gateways)) {
         log_msg(sprintf('ROUTING: ignoring down gateways: %s', implode(', ', $down_gateways)), LOG_DEBUG);
     }
 
@@ -817,17 +819,12 @@ function system_syslog_start($verbose = false)
     if (isvalidpid('/var/run/syslog-ng.pid') && $last_version == $this_version) {
         mwexecf('/usr/local/sbin/syslog-ng-ctl reload');
     } else {
-        mwexecf('/usr/sbin/service syslog-ng restart');
+        mwexecf('/usr/local/etc/rc.d/syslog-ng restart');
     }
 
     file_put_contents('/var/run/syslog-ng.version', $this_version);
 
     service_log("done.\n", $verbose);
-}
-
-function system_syslog_stop()
-{
-    mwexecf('/usr/sbin/service syslog-ng stop');
 }
 
 function system_syslog_reset($verbose = false)
@@ -844,21 +841,6 @@ function system_syslog_reset($verbose = false)
 
     system_syslog_start($verbose);
     plugins_configure('dhcp', $verbose);
-}
-
-/*
- *     get_memory()
- *     returns an array listing the amount of
- *     memory installed in the hardware
- *     [0] net memory available for the OS (FreeBSD) after some is taken by BIOS, video or whatever - e.g. 235 MBytes
- *     [1] real (actual) memory of the system, should be the size of the RAM card/s - e.g. 256 MBytes
- */
-function get_memory()
-{
-    $physmem = get_single_sysctl("hw.physmem");
-    $realmem = get_single_sysctl("hw.realmem");
-    /* convert from bytes to megabytes */
-    return array(($physmem / 1048576),($realmem / 1048576));
 }
 
 function system_firmware_configure($verbose = false)
@@ -1000,8 +982,7 @@ function system_trust_configure($verbose = false)
     }
     foreach (['/usr/local/etc/ssl/cert.pem'] as $pem) {
         @unlink($pem); /* do not clobber symlink target */
-        file_put_contents($pem, $ca_bundle);
-        chmod($pem, 0644);
+        file_safe($pem, $ca_bundle);
     }
 
     configd_run('template reload OPNsense/Trust');
@@ -1187,17 +1168,20 @@ function system_console_types()
     );
 }
 
-function system_console_speed()
+function system_cache_flush($verbose = false)
 {
-    global $config;
+    service_log('Flushing all caches...', $verbose);
 
-    $speed = 115200;
+    (new OPNsense\Core\ACL())->invalidateCache();
 
-    if (!empty($config['system']['serialspeed']) && is_numeric($config['system']['serialspeed'])) {
-        $speed = $config['system']['serialspeed'];
+    (new OPNsense\Base\Menu\MenuSystem())->invalidateCache();
+
+    /* clears ALL model caches, not just model specific ones via flushCacheData() */
+    foreach (glob('/var/lib/php/tmp/mdl_cache_*.json') as $filename) {
+        @unlink($filename);
     }
 
-    return $speed;
+    service_log("done.\n", $verbose);
 }
 
 function system_login_configure($verbose = false)
@@ -1209,7 +1193,11 @@ function system_login_configure($verbose = false)
     /* depends on user account locking */
     local_sync_accounts();
 
-    $serialspeed = system_console_speed();
+    $serialspeed = 115200;
+
+    if (!empty($config['system']['serialspeed']) && is_numeric($config['system']['serialspeed'])) {
+        $serialspeed = $config['system']['serialspeed'];
+    }
 
     $new_boot_config = array();
     $new_boot_config['comconsole_speed'] = null;

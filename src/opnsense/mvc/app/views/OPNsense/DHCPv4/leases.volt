@@ -51,9 +51,10 @@
         })
 
         $("#grid-leases").UIBootgrid({
-            search:'/api/dhcpv4/leases/searchLease/',
-            del:'/api/dhcpv4/leases/delLease/',
+            search:'/api/dhcpv4/leases/search_lease/',
+            del:'/api/dhcpv4/leases/del_lease/',
             options: {
+                virtualDOM: true,
                 selection: false,
                 multiSelect: false,
                 useRequestHandlerOnGet: true,
@@ -118,7 +119,7 @@
 
                         /* The delete action can be hooked up to the default bootgrid behaviour */
                         let deleteip = '<button type="button" class="btn btn-xs btn-default bootgrid-tooltip command-delete"' +
-                                'data-row-id="' + row.address + '" data-action="deleteSelected">' +
+                                'data-row-id="' + row.address + '">' +
                                 '<i class="fa fa-trash fa-fw"></i>' +
                                 '</a>';
 
@@ -128,8 +129,8 @@
             }
         });
 
-        $("#inactive-selection-wrapper").detach().prependTo('#grid-leases-header > .row > .actionBar');
-        $("#interface-selection-wrapper").detach().prependTo('#grid-leases-header > .row > .actionBar > .actions');
+        $("#inactive-selection-wrapper").detach().insertBefore('#grid-leases-header .search');
+        $("#interface-selection-wrapper").detach().insertAfter('#grid-leases-header .search');
 
         updateServiceControlUI('dhcpv4');
     });

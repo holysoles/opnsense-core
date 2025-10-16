@@ -141,7 +141,7 @@ EOD;
         if (isset($config['laggs']['lagg'][0])) {
             foreach ($config['laggs']['lagg'] as $lagg) {
                 $iflist_lagg[$lagg['laggif']] = $iflist_all[$lagg['laggif']] = [
-                    'dmesg' => "Link aggregation, member interfaces {$lagg['members']}",
+                    'descr' => "Link aggregation, member interfaces {$lagg['members']}",
                     'mac' => '00:00:00:00:00:00',
                 ];
             }
@@ -164,7 +164,7 @@ EOD;
         if (isset($config['vlans']['vlan'][0])) {
             foreach ($config['vlans']['vlan'] as $vlan) {
                 $iflist_all[$vlan['vlanif']] = [
-                    'dmesg' => "VLAN tag {$vlan['tag']}, parent interface {$vlan['if']}",
+                    'descr' => "VLAN tag {$vlan['tag']}, parent interface {$vlan['if']}",
                     'mac' => '00:00:00:00:00:00',
                 ];
             }
@@ -174,7 +174,7 @@ EOD;
     /* add WLAN parents now as LAGG/VLAN are not capable of handling it */
     foreach ($iflist_wlan as $iface) {
         $iflist_all[$iface] = [
-            'dmesg' => 'WLAN device parent',
+            'descr' => 'WLAN device parent',
             'mac' => '00:00:00:00:00:00',
         ];
     }
@@ -190,7 +190,7 @@ EOD;
         echo "No interfaces found!\n";
     } else {
         foreach ($iflist_all as $iface => $ifa) {
-            echo sprintf("%-16s %s %s\n", $iface, $ifa['mac'], $ifa['dmesg']);
+            echo sprintf("%-16s %s %s\n", $iface, $ifa['mac'], $ifa['descr']);
         }
     }
 
@@ -394,10 +394,22 @@ EOD;
                 $config['interfaces']['lan']['subnetv6'] = '64';
             }
 
-            config_read_array('dhcpd', 'lan', 'range');
-            $config['dhcpd']['lan']['enable'] = true;
-            $config['dhcpd']['lan']['range']['from'] = '192.168.1.100';
-            $config['dhcpd']['lan']['range']['to'] = '192.168.1.199';
+            if (isset($config['dhcpd']['lan'])) {
+                unset($config['dhcpd']['lan']);
+            }
+
+            config_read_array('dnsmasq', 'dhcp_ranges');
+            foreach ($config['dnsmasq']['dhcp_ranges'] as $idx => $range) {
+                if ($range['interface'] == 'lan') {
+                    unset($config['dnsmasq']['dhcp_ranges'][$idx]);
+                }
+            }
+            $config['dnsmasq']['enable'] = '1';
+            $config['dnsmasq']['dhcp_ranges'][] = [
+                'interface' => 'lan',
+                'start_addr' => '192.168.1.100',
+                'end_addr' => '192.168.1.200'
+            ];
 
             config_read_array('nat', 'outbound');
             $config['nat']['outbound']['mode'] = 'automatic';
@@ -542,7 +554,7 @@ EOD;
         echo "\nLAGG-capable interfaces:\n\n";
 
         foreach ($unused_ifs as $iface => $ifa) {
-            echo sprintf("%-8s %s %s\n", $iface, $ifa['mac'], $ifa['dmesg']);
+            echo sprintf("%-8s %s %s\n", $iface, $ifa['mac'], $ifa['descr']);
         }
 
         if (empty($unused_ifs)) {
@@ -625,7 +637,7 @@ EOD;
         echo "\nVLAN-capable interfaces:\n\n";
 
         foreach ($iflist as $iface => $ifa) {
-            echo sprintf("%-8s %s %s\n", $iface, $ifa['mac'], $ifa['dmesg']);
+            echo sprintf("%-8s %s %s\n", $iface, $ifa['mac'], $ifa['descr']);
         }
 
         echo "\nEnter the parent interface name for the new VLAN (or nothing if finished): ";

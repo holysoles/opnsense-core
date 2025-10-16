@@ -28,7 +28,7 @@
     'use strict';
 
     $( document ).ready(function () {
-        let grid_user = $("#grid-user").UIBootgrid({
+        let grid_user = $("#{{formGridUser['table_id']}}").UIBootgrid({
             search:'/api/auth/user/search/',
             get:'/api/auth/user/get/',
             add:'/api/auth/user/add/',
@@ -43,7 +43,7 @@
                         let refid = $(this).data("row-id") !== undefined ? $(this).data("row-id") : '';
                         ajaxGet('/api/auth/user/get/' + refid, {}, function(data){
                             if (data.user) {
-                                window.location ='/ui/trust/cert/#user=' + data.user.name ;
+                                window.location ='/ui/trust/cert#user=' + data.user.name ;
                             }
                         });
                     },
@@ -107,6 +107,17 @@
                     }
                 }
             }
+        }).on('load.rs.jquery.bootgrid', function() {
+            $("#upload_users").SimpleFileUploadDlg({
+                onAction: function(){
+                    grid_user.bootgrid('reload');
+                }
+            });
+
+            $("#download_users").click(function(e) {
+                e.preventDefault();
+                window.open("/api/auth/user/download");
+            });
         });
 
         let grid_apikey = $("#grid-apikey").UIBootgrid({
@@ -140,7 +151,8 @@
                 ajaxGet('/api/auth/user/new_otp_seed', {}, function(data){
                     if (data.seed) {
                         $("#user\\.otp_seed").val(data.seed);
-                        $('#otp_qrcode').empty().qrcode(data.otp_uri_template.replace('|USER|', $("#user\\.name").val()));
+                        let tmp = $("<div/>").html(data.otp_uri_template).text();
+                        $('#otp_qrcode').empty().qrcode(tmp.replace('|USER|', $("#user\\.name").val()));
                     }
                 });
             });
@@ -161,8 +173,6 @@
         $('.datepicker').datepicker({format: 'mm/dd/yyyy'});
         /* format  authorizedkeys */
         $("#user\\.authorizedkeys").css('max-width', 'inherit').prop('wrap', 'off');
-        $("#frm_DialogUser > div > table > colgroup > col:eq(1)").removeClass('col-md-4').addClass('col-md-6')
-        $("#frm_DialogUser > div > table > colgroup > col:eq(2)").removeClass('col-md-5').addClass('col-md-3')
     });
 
 </script>
@@ -174,43 +184,43 @@
     .tooltip-inner {
         max-width: 1000px !important;
     }
-    .modal-dialog.modal-lg {
-        width:70% !important;
+    .btn-user-action {
+        margin-left: 3px;
     }
-
 </style>
 
 <ul class="nav nav-tabs" data-tabs="tabs" id="maintabs">
     <li class="active"><a data-toggle="tab" href="#user">{{ lang._('Users') }}</a></li>
     <li><a data-toggle="tab" href="#apikeys" id="tab_apikeys"> {{ lang._('ApiKeys') }} </a></li>
 </ul>
+
 <div class="tab-content content-box">
     <div id="user" class="tab-pane fade in active">
-        <table id="grid-user" class="table table-condensed table-hover table-striped table-responsive" data-editDialog="DialogUser">
-            <thead>
-                <tr>
-                    <th data-column-id="uuid" data-type="string" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
-                    <th data-column-id="name" data-type="string" data-formatter="username">{{ lang._('Name') }}</th>
-                    <th data-column-id="email" data-type="string" data-visible="false">{{ lang._('Email') }}</th>
-                    <th data-column-id="comments" data-type="string" data-visible="false">{{ lang._('Comments') }}</th>
-                    <th data-column-id="language" data-type="string" data-visible="false">{{ lang._('Language') }}</th>
-                    <th data-column-id="group_memberships" data-type="string">{{ lang._('Groups') }}</th>
-                    <th data-column-id="descr" data-type="string">{{ lang._('Description') }}</th>
-                    <th data-column-id="commands" data-width="10em" data-formatter="commands" data-sortable="false">{{ lang._('Commands') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td></td>
-                    <td>
-                        <button data-action="add" type="button" class="btn btn-xs btn-primary"><span class="fa fa-fw fa-plus"></span></button>
-                        <button data-action="deleteSelected" type="button" class="btn btn-xs btn-default"><span class="fa fa-fw fa-trash-o"></span></button>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
+        {{
+            partial('layout_partials/base_bootgrid_table', formGridUser + {
+                'command_width': '135',
+                'grid_commands': {
+                    'upload_users': {
+                        'class': 'btn btn-xs btn-user-action',
+                        'icon_class': 'fa fa-fw fa-upload',
+                        'title': lang._('Import csv'),
+                        'data': {
+                            'title': lang._('Import Users'),
+                            'endpoint': '/api/auth/user/upload',
+                            'toggle': 'tooltip'
+                        }
+                    },
+                    'download_users': {
+                        'class': 'btn btn-xs btn-user-action',
+                        'icon_class': 'fa fa-fw fa-table',
+                        'title': lang._('Export as csv'),
+                        'data': {
+                            'toggle': 'tooltip'
+                        }
+                    }
+                }
+            })
+        }}
     </div>
     <div id="apikeys" class="tab-pane fade in">
         <table id="grid-apikey" class="table table-condensed table-hover table-striped table-responsive" data-editDialog="DialogUser">
@@ -236,4 +246,4 @@
     </div>
 </div>
 
-{{ partial("layout_partials/base_dialog",['fields':formDialogEditUser,'id':'DialogUser','label':lang._('Edit User')])}}
+{{ partial("layout_partials/base_dialog",['fields':formDialogEditUser,'id':formGridUser['edit_dialog_id'],'label':lang._('Edit User')])}}

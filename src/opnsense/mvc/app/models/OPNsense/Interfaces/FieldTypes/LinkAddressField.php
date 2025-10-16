@@ -53,7 +53,7 @@ class LinkAddressField extends BaseField
             self::$option_groups['ipalias'] = ['items' => [], 'title' => gettext('IP Alias')];
             foreach ($cfg->interfaces->children() as $ifname => $node) {
                 $descr = !empty((string)$node->descr) ? (string)$node->descr : strtoupper($ifname);
-                if (!empty((string)$node->virtual) || empty((string)$node->enable)) {
+                if (!empty((string)$node->virtual)) {
                     continue;
                 }
                 self::$known_addresses[$ifname] = $descr;
@@ -112,7 +112,7 @@ class LinkAddressField extends BaseField
      */
     public function getDescription()
     {
-        $value = $this->getCurrentValue();
+        $value = $this->getValue();
 
         if (isset(self::$known_addresses[$value])) {
             return self::$known_addresses[$value];
@@ -124,7 +124,7 @@ class LinkAddressField extends BaseField
     /**
      * return either ipaddr or if field, only one should be used, addresses are preferred.
      */
-    public function getCurrentValue(): string
+    public function getValue(): string
     {
         $parent = $this->getParentNode();
 
@@ -147,7 +147,7 @@ class LinkAddressField extends BaseField
         if (Util::isIpAddress($value)) {
             $parent->ipaddr = $value;
             $parent->if = '';
-        } else {
+        } elseif (isset($parent->if)) {
             $parent->if = $value;
             $parent->ipaddr = '';
         }

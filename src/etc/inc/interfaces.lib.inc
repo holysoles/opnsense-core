@@ -108,6 +108,9 @@ function legacy_interface_create($ifs, $name = null)
 
         /* return new name here anyway to force proper device not found errors later */
         $new = $name;
+    } elseif (empty($new)) {
+        /* we are here but have no name which means it was passed via $ifs instead */
+        $new = $ifs;
     }
 
     return ($new);
@@ -501,6 +504,27 @@ function legacy_interfaces_details($intf = null)
                 $result[$current_interface]['vxlan']['group'] = null;
                 $result[$current_interface]["vxlan"]["remote"] = $line_parts[6];
             }
+        } elseif (preg_match("/member: (.*)\Wflags=\w+<(.*)>.*/", $line, $matches)) {
+            if (empty($result[$current_interface]["members"])) {
+                $result[$current_interface]["members"] = [];
+            }
+            $result[$current_interface]["members"][$matches[1]] = [
+                "flags" => explode(",", strtolower($matches[2]))
+            ];
+        } elseif (preg_match("/\tnd6 options=\w+<(.*)>/", $line, $matches)) {
+            $result[$current_interface]["nd6"] = [
+                "flags" => explode(",", strtolower($matches[1]))
+            ];
+        } elseif (preg_match("/\tid ([\w\:]+) priority (\d+) hellotime (\d+) fwddelay (\d+).*/", $line, $matches)) {
+            $result[$current_interface]["priority"] = $matches[2];
+            $result[$current_interface]["hellotime"] = $matches[3];
+            $result[$current_interface]["fwddelay"] = $matches[4];
+        } elseif (preg_match("/\tmaxage (\d+) holdcnt (\d+) proto (\w+) maxaddr (\d+) timeout (\d+).*/", $line, $matches)) {
+            $result[$current_interface]["maxage"] = $matches[1];
+            $result[$current_interface]["holdcnt"] = $matches[2];
+            $result[$current_interface]["proto"] = $matches[3];
+            $result[$current_interface]["maxaddr"] = $matches[4];
+            $result[$current_interface]["timeout"] = $matches[5];
         }
     }
 
@@ -676,8 +700,7 @@ function get_interface_list($only_active = false, $include_dmesg = false)
     $ifnames_up = legacy_interface_listget('up');
     $ifnames = legacy_interface_listget();
 
-    $all_interfaces = legacy_config_get_interfaces(['virtual' => false]);
-    $all_interface_data = legacy_interfaces_details();
+    $interface_data = legacy_interfaces_details();
 
     if ($only_active) {
         $_ifnames = [];
@@ -700,25 +723,18 @@ function get_interface_list($only_active = false, $include_dmesg = false)
             continue;
         }
 
-        $ifdata = !empty($all_interface_data[$ifname]) ? $all_interface_data[$ifname] : [];
+        $ifdata = !empty($interface_data[$ifname]) ? $interface_data[$ifname] : [];
         $toput = [
           'up' => in_array($ifname, $ifnames_up),
           'ipaddr' => !empty($ifdata['ipv4'][0]['ipaddr']) ? $ifdata['ipv4'][0]['ipaddr'] : null,
           'mac' => !empty($ifdata['macaddr']) ? $ifdata['macaddr'] : null,
-          'dmesg' => '',
+          'descr' => '',
         ];
 
-        foreach ($all_interfaces as $name => $int) {
-            if ($int['if'] == $ifname) {
-                $toput['friendly'] = $name;
-                break;
-            }
-        }
-
         foreach ($dmesg_arr as $dmesg_line) {
-            $dmesg = [];
-            if (preg_match("/^{$ifname}: <(.*?)>/i", $dmesg_line, $dmesg) == 1) {
-                $toput['dmesg'] = $dmesg[1];
+            $descr = [];
+            if (preg_match("/\b{$ifname}: <(.*?)>/i", $dmesg_line, $descr) == 1) {
+                $toput['descr'] = $descr[1];
                 break;
             }
         }

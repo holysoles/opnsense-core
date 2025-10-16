@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2014-2023 Deciso B.V.
+ * Copyright (C) 2014-2025 Deciso B.V.
  * Copyright (C) 2010 Ermal Luçi
  * Copyright (C) 2007-2008 Scott Ullrich <sullrich@gmail.com>
  * Copyright (C) 2005-2006 Bill Marquette <bill.marquette@gmail.com>
@@ -49,14 +49,12 @@ $userindex = index_users();
  */
 function isAuthLocalIP($http_host)
 {
-    global $config;
-    if (isset($config['virtualip']['vip'])) {
-        foreach ($config['virtualip']['vip'] as $vip) {
-            if ($vip['subnet'] == $http_host) {
-                return true;
-            }
+    foreach (config_read_array('virtualip', 'vip') as $vip) {
+        if ($vip['subnet'] == $http_host) {
+            return true;
         }
     }
+
     $address_in_list = function ($interface_list_ips, $http_host) {
         foreach ($interface_list_ips as $ilips => $ifname) {
             // remove scope from link-local IPv6 addresses
@@ -66,14 +64,20 @@ function isAuthLocalIP($http_host)
             }
         }
     };
-    // try using cached addresses
-    $interface_list_ips = get_cached_json_content("/tmp/isAuthLocalIP.cache.json");
+
+    $auth_cache = '/var/lib/php/tmp/isAuthLocalIP.cache.json';
+
+    /* try using cached addresses */
+    $interface_list_ips = get_cached_json_content($auth_cache);
     if (!empty($interface_list_ips) && $address_in_list($interface_list_ips, $http_host)) {
         return true;
     }
-    // fetch addresses and store in cache
+
+    /* fetch addresses and store in cache */
     $interface_list_ips = get_configured_ip_addresses();
-    file_put_contents("/tmp/isAuthLocalIP.cache.json", json_encode($interface_list_ips));
+    file_put_contents($auth_cache, json_encode($interface_list_ips));
+    chown($auth_cache, 'wwwonly'); /* XXX frontend owns file */
+    chgrp($auth_cache, 'wheel'); /* XXX backend can work with it */
 
     return $address_in_list($interface_list_ips, $http_host);
 }
@@ -82,9 +86,11 @@ function index_groups()
 {
     global $config, $groupindex;
 
-    $groupindex = array();
+    $groupindex = [];
+
     if (isset($config['system']['group'])) {
         $i = 0;
+
         foreach ($config['system']['group'] as $groupent) {
             if (isset($groupent['name'])) {
                 $groupindex[$groupent['name']] = $i;
@@ -93,7 +99,7 @@ function index_groups()
         }
     }
 
-    return ($groupindex);
+    return $groupindex;
 }
 
 function index_users()
@@ -104,10 +110,12 @@ function index_users()
 
     if (!empty($config['system']['user'])) {
         $i = 0;
+
         foreach ($config['system']['user'] as $userent) {
             if (!empty($userent) && !empty($userent['name'])) {
                 $userindex[$userent['name']] = $i;
             }
+
             $i++;
         }
     }
@@ -118,7 +126,9 @@ function index_users()
 function getUserGroups($username)
 {
     global $config;
-    $member_groups = array();
+
+    $member_groups = [];
+
     $user = getUserEntry($username);
     if ($user !== false) {
         $allowed_groups = local_user_get_groups($user);
@@ -130,18 +140,20 @@ function getUserGroups($username)
             }
         }
     }
+
     return $member_groups;
 }
 
 function &getUserEntry($name)
 {
     global $config, $userindex;
-    $false = false;
+
     if (isset($userindex[$name])) {
         return $config['system']['user'][$userindex[$name]];
-    } else {
-        return $false;
     }
+
+    $ret = false; /* XXX "fixes" return by reference */
+    return $ret;
 }
 
 function &getUserEntryByUID($uid)
@@ -156,7 +168,8 @@ function &getUserEntryByUID($uid)
         }
     }
 
-    return false;
+    $ret = false; /* XXX "fixes" return by reference */
+    return $ret;
 }
 
 function &getGroupEntry($name)
@@ -167,12 +180,14 @@ function &getGroupEntry($name)
         return $config['system']['group'][$groupindex[$name]];
     }
 
-    return array();
+    $ret = []; /* XXX "fixes" return by reference */
+    return $ret;
 }
 
 function get_user_privileges(&$user)
 {
     $privs = [];
+
     /* legacy listtags() ensures 'priv' will be an array when offered, also when there's only one  */
     foreach (!empty($user['priv']) ? (array)$user['priv'] : [] as $item) {
         foreach (array_filter(explode(',', $item)) as $priv) {
@@ -188,6 +203,7 @@ function get_user_privileges(&$user)
             }
         }
     }
+
     return $privs;
 }
 
@@ -211,9 +227,7 @@ function userHasPrivilege($userent, $privid = false)
 
 function userIsAdmin($username)
 {
-    $user = getUserEntry($username);
-
-    return userHasPrivilege($user, 'page-all');
+    return userHasPrivilege(getUserEntry($username), 'page-all');
 }
 
 function local_sync_accounts()
@@ -241,9 +255,9 @@ function local_sync_accounts()
     $config_map = [];
     foreach (['user', 'group'] as $section) {
         $config_map[$section] = [];
-        if (is_array($config['system'][$section])) {
+        if (!empty($config['system'][$section])) {
             foreach ($config['system'][$section] as $item) {
-                if ($section == 'user' && (empty($item['shell']) && $item['uid'] != 0)) {
+                if ($section == 'user' && (empty($item) || (empty($item['shell']) && !empty($item['uid'])))) {
                     /* no shell, no local user */
                     continue;
                 }
@@ -280,16 +294,15 @@ function local_sync_accounts()
 
     /* sync all local groups */
     if (is_array($config['system']['group'])) {
+        $uids = local_user_list_uids();
         foreach ($config['system']['group'] as $group) {
-            local_group_set($group);
+            local_group_set($group, $uids);
         }
     }
 }
 
 function local_user_set(&$user, $force_password = false, $userattrs = null)
 {
-    global $config;
-
     if (empty($user['password'])) {
         auth_log("Cannot set user {$user['name']}: password is missing");
         return;
@@ -304,7 +317,7 @@ function local_user_set(&$user, $force_password = false, $userattrs = null)
     $user_pass = $force_password ? $user['password'] : '*';
     $user_name = $user['name'];
     $user_uid = $user['uid'];
-    $comment = str_replace(array(':', '!', '@'), ' ', $user['descr']);
+    $comment = str_replace([':', '!', '@'], ' ', $user['descr']);
 
     $lock_account = 'lock';
 
@@ -397,7 +410,7 @@ function local_user_set(&$user, $force_password = false, $userattrs = null)
         @unlink("{$user_home}/.ssh/authorized_keys");
     }
 
-    mwexecf('/usr/sbin/pw %s %s', array($lock_account, $user_name), true);
+    mwexecf('/usr/sbin/pw %s %s', [$lock_account, $user_name], true);
 }
 
 function local_user_set_password(&$user, $password = null)
@@ -442,6 +455,19 @@ function local_user_set_password(&$user, $password = null)
     }
 }
 
+/* collect a list of know uids */
+function local_user_list_uids()
+{
+    $uids = [];
+    foreach (explode("\n", shell_safe('/usr/sbin/pw usershow -a')) as $line) {
+        $parts = explode(":", $line);
+        if (count($parts) > 2) {
+            $uids[] = $parts[2];
+        }
+    }
+    return $uids;
+}
+
 function local_user_get_groups($user)
 {
     global $config;
@@ -468,10 +494,13 @@ function local_user_get_groups($user)
     return $groups;
 }
 
-function local_group_set($group)
+function local_group_set($group, $uids = null)
 {
     if (!isset($group['name']) || !isset($group['gid'])) {
         return;
+    }
+    if (empty($uids)) {
+        $uids = local_user_list_uids();
     }
 
     $group_name = $group['name'];
@@ -481,6 +510,9 @@ function local_group_set($group)
     if (!empty($group['member']) && count($group['member']) > 0) {
         $members = [];
         foreach ($group['member'] as $member) {
+            if (!in_array($member, $uids)) {
+                continue;
+            }
             $members = array_merge($members, explode(',', $member));
         }
         $group_members = implode(',', $members);
@@ -493,8 +525,9 @@ function local_group_set($group)
         $group_op = 'groupmod';
     }
 
-    mwexecf('/usr/sbin/pw %s %s -g %s -M %s', array($group_op, $group_name, $group_gid, $group_members));
+    mwexecf('/usr/sbin/pw %s %s -g %s -M %s', [$group_op, $group_name, $group_gid, $group_members]);
 }
+
 
 /**
  * @param $name string name of the authentication system configured on the authentication server page or 'Local Database' for local authentication
@@ -502,70 +535,14 @@ function local_group_set($group)
  */
 function auth_get_authserver($name)
 {
-    global $config;
-
-    if ($name == "Local Database") {
-        return array(
-          "name" => gettext("Local Database"),
-          "type" => "local",
-          "host" => $config['system']['hostname']
-        );
+    $servers = auth_get_authserver_list();
+    if (isset($servers[$name])) {
+        return $servers[$name];
     }
-
-    if (!empty($config['system']['authserver'])) {
-        foreach ($config['system']['authserver'] as $authcfg) {
-            if ($authcfg['name'] == $name) {
-                if ($authcfg['type'] == 'ldap' || $authcfg['type'] == 'ldap-totp') {
-                    // make sure a user and password entry exists and are null for anonymous usage
-                    if (empty($authcfg['ldap_binddn'])) {
-                        $authcfg['ldap_binddn'] = null;
-                    }
-                    if (empty($authcfg['ldap_bindpw'])) {
-                        $authcfg['ldap_bindpw'] = null;
-                    }
-                }
-                return $authcfg;
-            }
-        }
-    }
-
     return false;
 }
 
-function auth_get_authserver_list()
+function auth_get_authserver_list($service = '')
 {
-    global $config;
-
-    $list = array();
-
-    if (!empty($config['system']['authserver'])) {
-        foreach ($config['system']['authserver'] as $authcfg) {
-            /* Add support for disabled entries? */
-            $list[$authcfg['name']] = $authcfg;
-        }
-    }
-
-    $list["Local Database"] = array( "name" => gettext("Local Database"), "type" => "local", "host" => $config['system']['hostname']);
-    return $list;
-}
-
-/**
- * return authenticator object
- * @param array|null $authcfg configuration
- * @return Auth\Base type object
- */
-function get_authenticator($authcfg = null)
-{
-    if (empty($authcfg)) {
-        $authName = 'Local Database';
-    } else {
-        $authName = $authcfg['name'];
-        if ($authcfg['type'] == 'local') {
-            // avoid gettext type issues on Local Database, authenticator should always be named "Local Database"
-            $authName = 'Local Database';
-        }
-    }
-
-    $authFactory = new OPNsense\Auth\AuthenticationFactory();
-    return $authFactory->get($authName);
+    return (new \OPNsense\Auth\AuthenticationFactory())->listServers($service);
 }

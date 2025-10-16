@@ -151,6 +151,8 @@ class MenuSystem
             flock($fp, LOCK_UN);
             fclose($fp);
             chmod($this->menuCacheFilename, 0660);
+            @chown($this->menuCacheFilename, 'wwwonly'); /* XXX frontend owns file */
+            @chgrp($this->menuCacheFilename, 'wheel'); /* XXX backend can work with it */
         }
         // return generated xml
         return simplexml_import_dom($root);
@@ -170,13 +172,34 @@ class MenuSystem
     }
 
     /**
+     * temporary legacy glue to remove isc dhcp4 settings when not enabled and Dnsmasq is configured as dhcp
+     * @return boolean
+     */
+
+    private function isc_v4_enabled($if)
+    {
+        $config = Config::getInstance()->object();
+        if (isset($config->dhcpd) && isset($config->dhcpd->$if) && !empty((string)$config->dhcpd->$if->enable)) {
+            /* still configured on interface */
+            return true;
+        } elseif (isset($config->dnsmasq) && empty((string)$config->dnsmasq->enable)) {
+            /* dnsmasq not configured at all */
+            return true;
+        } elseif (isset($config->dnsmasq) && !empty((string)$config->dnsmasq->interface)) {
+            /* dnsmasq configured, but only on selected interfaces */
+            return !in_array($if, explode(',', $config->dnsmasq->interface));
+        }
+        return false;
+    }
+
+    /**
      * construct a new menu
      * @throws MenuInitException
      */
     public function __construct()
     {
         // set cache location
-        $this->menuCacheFilename = sys_get_temp_dir() . "/opnsense_menu_cache.xml";
+        $this->menuCacheFilename = (new AppConfig())->application->tempDir . '/opnsense_menu_cache.xml';
 
         // load menu xml's
         $menuxml = null;
@@ -238,10 +261,13 @@ class MenuSystem
                 }
                 // "Services: DHCPv[46]" menu tab:
                 if (empty($node->virtual) && isset($node->enable)) {
-                    if (!empty(filter_var($node->ipaddr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))) {
+                    if (
+                        $this->isc_v4_enabled($key) &&
+                        !empty(filter_var($node->ipaddr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
+                    ) {
                         $iftargets['dhcp4'][$key] = !empty($node->descr) ? (string)$node->descr : strtoupper($key);
                     }
-                    if (!empty(filter_var($node->ipaddrv6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) || !empty($node->dhcpd6track6allowoverride)) {
+                    if (!empty(filter_var($node->ipaddrv6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) || !empty($node->{'track6-interface'})) {
                         $iftargets['dhcp6'][$key] = !empty($node->descr) ? (string)$node->descr : strtoupper($key);
                     }
                 }

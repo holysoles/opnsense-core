@@ -31,6 +31,7 @@ namespace OPNsense\Firewall\FieldTypes;
 use OPNsense\Base\FieldTypes\BaseField;
 use OPNsense\Base\Messages\Message;
 use OPNsense\Base\Validators\CallbackValidator;
+use OPNsense\Core\AppConfig;
 use OPNsense\Core\Config;
 use OPNsense\Firewall\Util;
 
@@ -105,7 +106,8 @@ class AliasContentField extends BaseField
         if (empty(self::$internalCountryCodes)) {
             // Maxmind's country code 6255148 (EU Unclassified)
             self::$internalCountryCodes[] = 'EU';
-            foreach (explode("\n", file_get_contents('/usr/local/opnsense/contrib/tzdata/iso3166.tab')) as $line) {
+            $contribDir = (new AppConfig())->application->contribDir;
+            foreach (explode("\n", file_get_contents($contribDir . '/iana/tzdata-iso3166.tab')) as $line) {
                 $line = trim($line);
                 if (strlen($line) > 3 && substr($line, 0, 1) != '#') {
                     self::$internalCountryCodes[] = substr($line, 0, 2);
@@ -181,9 +183,16 @@ class AliasContentField extends BaseField
         $messages = array();
         foreach ($this->getItems($data) as $host) {
             $range = explode('-', $host);
-            if (count($range) == 2 && Util::isIpAddress($range[0]) && Util::isIpAddress($range[1])) {
+            if (count($range) == 2 && Util::isIpAddress($range[0])) {
                 // address range
-                continue;
+                if (Util::isIpAddress($range[1])) {
+                    continue;
+                } else {
+                    $messages[] = sprintf(
+                        gettext('Entry "%s" is not a valid hostname, IP address or range.'),
+                        $host
+                    );
+                }
             } elseif (strpos($host, '!') === 0 && Util::isIpAddress(substr($host, 1))) {
                 // exclude address (https://www.freebsd.org/doc/handbook/firewalls-pf.html 30.3.2.4)
                 continue;

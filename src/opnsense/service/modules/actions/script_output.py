@@ -38,6 +38,17 @@ from .base import BaseAction
 class Action(BaseAction):
     temp_prefix = 'tmpcfd_'
     cached_results = None
+
+    def cache_flush(self, parameters):
+        if Action.cached_results is None or not self.cache_ttl:
+            return
+        try:
+            script_hash = hashlib.sha256(self._cmd_builder(parameters).encode()).hexdigest()
+        except TypeError as e:
+            return
+        if script_hash in Action.cached_results and os.path.isfile(Action.cached_results[script_hash]['filename']):
+            os.remove(Action.cached_results[script_hash]['filename'])
+
     def execute(self, parameters, message_uuid, *args, **kwargs):
         super().execute(parameters, message_uuid, *args, **kwargs)
         try:
@@ -75,8 +86,8 @@ class Action(BaseAction):
                             'filename': output_stream.name,
                             'expire': time.time() + self.cache_ttl
                         }
-                    subprocess.check_call(script_command, env=self.config_environment, shell=True,
-                                          stdout=output_stream, stderr=error_stream)
+                    subprocess.run(script_command, env=self.config_environment, shell=True,
+                                   check=not self.disable_errors, stdout=output_stream, stderr=error_stream)
                     output_stream.seek(0)
                     error_stream.seek(0)
                     script_output = output_stream.read()

@@ -66,15 +66,15 @@ class ControllerBase extends ControllerRoot
           '/ui/js/jquery-3.5.1.min.js',
           // JQuery Tokenize2 (https://zellerda.github.io/Tokenize2/)
           '/ui/js/tokenize2.js',
-          // Bootgrid (grid system from http://www.jquery-bootgrid.com/ )
-          '/ui/js/jquery.bootgrid.js',
+          // Tabulator and related grid integration (https://tabulator.info/)
+          '/ui/js/tabulator.min.js',
+          '/ui/js/opnsense_bootgrid.js',
           // Bootstrap type ahead
           '/ui/js/bootstrap3-typeahead.min.js',
           // OPNsense standard toolkit
           '/ui/js/opnsense.js',
           '/ui/js/opnsense_theme.js',
           '/ui/js/opnsense_ui.js',
-          '/ui/js/opnsense_bootgrid_plugin.js',
           '/ui/js/opnsense_status.js',
           // bootstrap script
           '/ui/js/bootstrap.min.js',
@@ -96,13 +96,15 @@ class ControllerBase extends ControllerRoot
             '/css/bootstrap-select.css',
             // bootstrap dialog
             '/css/bootstrap-dialog.css',
+            '/css/tabulator.min.css',
+            '/css/opnsense-bootgrid.css',
+            '/css/opnsense-bootgrid-layout.css',
             // Font awesome
-            '/ui/assets/fontawesome/css/fontawesome.min.css',
-            '/ui/assets/fontawesome/css/solid.min.css',
-            '/ui/assets/fontawesome/css/brands.min.css',
+            '/ui/assets/fontawesome/css/all.min.css',
             '/ui/assets/fontawesome/css/v4-shims.min.css',
             // JQuery Tokenize2 (https://zellerda.github.io/Tokenize2/)
             '/css/tokenize2.css',
+            /* XXX provided for backwards compatibility */
             // Bootgrid (grid system from http://www.jquery-bootgrid.com/ )
             '/css/jquery.bootgrid.css'
         ];
@@ -126,7 +128,7 @@ class ControllerBase extends ControllerRoot
             '.volt' => function ($view) use ($appcfg, $volt_functions) {
                 $volt = new VoltEngine($view);
                 $volt->setOptions([
-                    'path' => $appcfg->application->cacheDir,
+                    'path' => $appcfg->application->cacheDir . '/', /* XXX definitely a Phalcon bug */
                     'separator' => '_'
                 ]);
                 foreach ($volt_functions as $func_name => $function) {
@@ -147,7 +149,7 @@ class ControllerBase extends ControllerRoot
         $this->view->processRender('', '');
         $this->view->finish();
 
-        $this->response->setContent($this->view->getContent());
+        $this->response->setContent($this->view->getContent(), true);
     }
 
     /**
@@ -234,7 +236,7 @@ class ControllerBase extends ControllerRoot
      * Extract grid fields from form definition
      * @return array
      */
-    public function getFormGrid($formname, $grid_id = null, $edit_alert_id = null)
+    public function getFormGrid($formname, $grid_id = null, $edit_alert_id = null, $root = null)
     {
         /* collect all fields, sort by sequence */
         $all_data = [];
@@ -255,8 +257,12 @@ class ControllerBase extends ControllerRoot
                             $record['label'] = gettext((string)$item);
                             break;
                         case 'id':
-                            $tmp = explode('.', (string)$item);
-                            $record['column-id'] = end($tmp);
+                            $parts = explode('.', (string)$item);
+                            if (!empty($root)) {
+                                $record['column-id'] = implode('.', array_slice($parts, array_search($root, $parts) + 1));
+                            } else {
+                                $record['column-id'] = end($parts);
+                            }
                             break;
                     }
                 }
@@ -290,7 +296,7 @@ class ControllerBase extends ControllerRoot
         return [
             'table_id' => $basename,
             'edit_dialog_id' => 'dialog_' . $basename,
-            'edit_alert_id' => $edit_alert_id == null ? 'change_message_' . $basename : $edit_alert_id,
+            'edit_alert_id' => $edit_alert_id == null ? 'change_message_base_form' : $edit_alert_id,
             'fields' => array_values($all_data)
         ];
     }

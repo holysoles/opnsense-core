@@ -32,8 +32,7 @@
 
 function unbound_enabled()
 {
-    $mdl = new \OPNsense\Unbound\Unbound();
-    return !empty((string)$mdl->general->enabled);
+    return !(new \OPNsense\Unbound\Unbound())->general->enabled->isEmpty();
 }
 
 function unbound_configure()
@@ -103,6 +102,52 @@ function unbound_optimization()
     return $optimization;
 }
 
+function unbound_service_mount_sync($umount = false)
+{
+    $mountpoints = [
+        '/var/unbound/dev' => [
+            'special' => 'devfs',
+            'fstype' => 'devfs'
+        ],
+        '/var/unbound/usr/local/lib/' . readlink('/usr/local/bin/python3') => [
+            'special' => '/usr/local/lib/' . readlink('/usr/local/bin/python3'),
+            'fstype' => 'nullfs'
+        ],
+        '/var/unbound/lib' => [
+            'special' => '/lib',
+            'fstype' => 'nullfs'
+        ]
+    ];
+    /* collect mounted */
+    exec('/sbin/mount --libxo json 2>&1', $out_mnt, $ret_mnt);
+    $mounted = [];
+    if (!$ret_mnt && !empty($out_mnt[0])) {
+        $tmp = json_decode($out_mnt[0], true) ?? [];
+        if (!empty($tmp['mount']) && !empty($tmp['mount']['mounted'])) {
+            foreach ($tmp['mount']['mounted'] as $dev) {
+                if (!empty($dev['node'])) {
+                    $mounted[$dev['node']] = $dev;
+                }
+            }
+        }
+    }
+    /* sync requested mountpoints */
+    foreach ($mountpoints as $mntpoint => $dev) {
+        $mntargs = [$dev['fstype'], $dev['special'], $mntpoint];
+        $mntcmd = '/sbin/mount ' . ($dev['fstype'] != 'devfs' ? '-r' : '') . ' -t %s %s %s';
+        if (!empty($mounted[$mntpoint])) {
+            if ($umount || $mounted[$mntpoint]['special'] != $dev['special']) {
+                mwexecf('/sbin/umount %s', $mntpoint, true);
+                if (!$umount) {
+                    mwexecf($mntcmd, $mntargs);
+                }
+            }
+        } elseif (!$umount) {
+            mwexecf($mntcmd, $mntargs);
+        }
+    }
+}
+
 function unbound_service_stop()
 {
     $mdl = new \OPNsense\Unbound\Unbound();
@@ -120,10 +165,6 @@ function unbound_service_stop()
     killbypid('/var/run/unbound_logger.pid');
     killbypid('/var/run/unbound_dhcpd.pid');
     killbypid('/var/run/unbound.pid');
-
-    mwexecf('/sbin/umount %s', '/var/unbound/dev', true);
-    mwexecf('/sbin/umount %s', '/var/unbound/usr/local/lib/' . readlink('/usr/local/bin/python3'), true);
-    mwexecf('/sbin/umount %s', '/var/unbound/lib', true);
 }
 
 function unbound_generate_config()
@@ -141,9 +182,7 @@ function unbound_generate_config()
         mwexecf('/bin/mkdir -p %s', "/var/unbound{$dir}");
     }
 
-    mwexecf('/sbin/mount -t devfs devfs %s', '/var/unbound/dev');
-    mwexecf('/sbin/mount -r -t nullfs %s %s', [$python_dir, $chroot_python_dir]);
-    mwexecf('/sbin/mount -r -t nullfs %s %s', ['/lib', '/var/unbound/lib']);
+    unbound_service_mount_sync();
 
     $optimization = unbound_optimization();
 
@@ -345,10 +384,7 @@ EOD;
     file_put_contents('/var/unbound/unbound.conf', $unboundconf);
 
     /* Unbound load tripping over this file is very strange so make it a very safe rewrite */
-    $root_hints_tmp = tempnam('/var/unbound', 'root.hints.');
-    copy('/usr/local/opnsense/data/unbound/root.min.hints', $root_hints_tmp);
-    chmod($root_hints_tmp, 0644);
-    rename($root_hints_tmp, '/var/unbound/root.hints');
+    file_safe('/var/unbound/root.hints', '/usr/local/opnsense/data/unbound/root.min.hints');
 
     configd_run('template reload OPNsense/Unbound/*');
 }
@@ -409,6 +445,7 @@ function unbound_configure_do($verbose = false, $interface_map = null)
     unbound_service_stop();
 
     if (!unbound_enabled()) {
+        unbound_service_mount_sync(true);
         return;
     }
 
@@ -569,7 +606,7 @@ function unbound_add_host_entries($ifconfig_details)
                             /* Handle wildcard entries which have "*" as a hostname. Since we added a . above, we match on "*.". */
                             if ($alias['hostname'] == '*.') {
                                 $unbound_entries .= "local-zone: \"{$alias['domain']}\" redirect\n";
-                                $unbound_entries .= "local-data: \"{$alias['domain']} IN {$host->rr} {$host->server}\"\n";
+                                $unbound_entries .= "local-data: \"{$alias['domain']} {$host->ttl} IN {$host->rr} {$host->server}\"\n";
                             } else {
                                 if (($override_is_main || $tmp_aliases[0]['hostname'] === '*') && !in_array($host->server, $ptr_records, true)) {
                                     /* Only generate a PTR record for the non-alias override and only if the IP is not already associated with a PTR.
@@ -580,15 +617,18 @@ function unbound_add_host_entries($ifconfig_details)
                                 } else {
                                     syslog(LOG_WARNING, 'PTR record already exists for ' . $alias['hostname'] . $alias['domain'] . '(' . $host->server . ')');
                                 }
-                                $unbound_entries .= "local-data: \"{$alias['hostname']}{$alias['domain']} IN {$host->rr} {$host->server}\"\n";
+                                $unbound_entries .= "local-data: \"{$alias['hostname']}{$alias['domain']} {$host->ttl} IN {$host->rr} {$host->server}\"\n";
                             }
                             break;
                         case 'MX':
-                            $unbound_entries .= "local-data: \"{$alias['hostname']}{$alias['domain']} IN MX {$host->mxprio} {$host->mx}\"\n";
+                            $unbound_entries .= "local-data: \"{$alias['hostname']}{$alias['domain']} {$host->ttl} IN MX {$host->mxprio} {$host->mx}\"\n";
+                            break;
+                        case 'TXT':
+                            $unbound_entries .= "local-data: '{$alias['hostname']}{$alias['domain']} {$host->ttl} IN TXT \"" . addslashes($host->txtdata) . "\"'\n";
                             break;
                     }
 
-                    if (!empty($alias['description']) && !empty($general['txtsupport'])) {
+                    if (!empty($alias['description']) && !empty($general['txtsupport']) && $alias['hostname'] != '*.') {
                         $unbound_entries .= "local-data: '{$alias['hostname']}{$alias['domain']} TXT \"" . addslashes($alias['description']) . "\"'\n";
                     }
                 }

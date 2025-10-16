@@ -187,9 +187,9 @@ function parse_xml_config_raw_attr($cffile, $rootobj, &$parsed_attributes, $isst
 
     $xml_parser = xml_parser_create();
 
-    xml_set_element_handler($xml_parser, "startElement_attr", "endElement_attr");
-    xml_set_character_data_handler($xml_parser, "cData_attr");
-    xml_parser_set_option($xml_parser,XML_OPTION_SKIP_WHITE, 1);
+    xml_set_element_handler($xml_parser, 'startElement_attr', 'endElement_attr');
+    xml_set_character_data_handler($xml_parser, 'cData_attr');
+    xml_parser_set_option($xml_parser, XML_OPTION_SKIP_WHITE, 1);
 
     if (!($fp = fopen($cffile, "r"))) {
         log_msg('Error: could not open XML input', LOG_ERR);
@@ -261,9 +261,9 @@ function get_wireless_modes($interface)
 {
     $wireless_modes = [];
 
-    $cloned_interface = get_real_interface($interface);
-    if ($cloned_interface) {
-        $chan_list = shell_safe('/sbin/ifconfig -v %s list chan', $cloned_interface);
+    $device = get_real_interface($interface);
+    if ($device) {
+        $chan_list = shell_safe('/sbin/ifconfig -v %s list chan', $device);
         $matches = [];
 
         preg_match_all('/Channel\s+([^\s]+)\s+:\s+[^\s]+\s+[^\s]+\s+([^\s]+(?:\sht(?:\/[^\s]+)?)?)/', $chan_list, $matches);
@@ -304,9 +304,9 @@ function get_wireless_channel_info($interface)
 {
     $wireless_channels = [];
 
-    $cloned_interface = get_real_interface($interface);
-    if ($cloned_interface) {
-        $chan_list = shell_safe('/sbin/ifconfig %s list txpower', $cloned_interface);
+    $device = get_real_interface($interface);
+    if ($device) {
+        $chan_list = shell_safe('/sbin/ifconfig %s list txpower', $device);
         $matches = [];
 
         preg_match_all('/Channel\s+([^\s]+)\s+:\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+[^\s]+\s+([^\s]+)/', $chan_list, $matches);
@@ -431,8 +431,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
     $pconfig['enable'] = isset($a_interfaces[$if]['enable']);
     $pconfig['lock'] = isset($a_interfaces[$if]['lock']);
-    $pconfig['blockpriv'] = isset($a_interfaces[$if]['blockpriv']);
-    $pconfig['blockbogons'] = isset($a_interfaces[$if]['blockbogons']);
+    $pconfig['blockpriv'] = !empty($a_interfaces[$if]['blockpriv']);
+    $pconfig['blockbogons'] = !empty($a_interfaces[$if]['blockbogons']);
     $pconfig['gateway_interface'] = isset($a_interfaces[$if]['gateway_interface']);
     $pconfig['promisc'] = isset($a_interfaces[$if]['promisc']);
     $pconfig['dhcpoverridemtu'] = empty($a_interfaces[$if]['dhcphonourmtu']) ? true : null;
@@ -598,9 +598,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
         if (empty($toapplylist[$if])) {
             // only flush if the running config is not in our list yet
+            $devices = get_real_interface($if, 'both');
             $toapplylist[$if]['ifcfg'] = $a_interfaces[$if];
-            $toapplylist[$if]['ifcfg']['realif'] = get_real_interface($if);
-            $toapplylist[$if]['ifcfg']['realifv6'] = get_real_interface($if, "inet6");
+            $toapplylist[$if]['ifcfg']['realif'] = reset($devices);
+            $toapplylist[$if]['ifcfg']['realifv6'] = end($devices);
             $toapplylist[$if]['ppps'] = $a_ppps;
             file_put_contents('/tmp/.interfaces.apply', serialize($toapplylist));
         }
@@ -960,9 +961,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (count($input_errors) == 0) {
             $old_config = $a_interfaces[$if];
             // retrieve our interface names before anything changes
-            $old_config['realif'] = get_real_interface($if);
-            $old_config['realifv6'] = get_real_interface($if, "inet6");
-            $new_config = array();
+            $devices = get_real_interface($if, 'both');
+            $old_config['realif'] = reset($devices);
+            $old_config['realifv6'] = end($devices);
+            $new_config = [];
 
             // copy physical interface data (wireless is a strange case, partly managed via interface_sync_wireless_clones)
             $new_config['if'] = $old_config['if'];
@@ -990,7 +992,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 if (isset($mediaopts[0])) {
                     $new_config['media'] = $mediaopts[0];
                 }
-                if (isset($mediaopts[0])) {
+                if (isset($mediaopts[1])) {
                     $new_config ['mediaopt'] = $mediaopts[1];
                 }
             }
@@ -1656,9 +1658,8 @@ include("head.inc");
                           <td style="width:78%">
                             <input name="blockpriv" type="checkbox" id="blockpriv" value="yes" <?=!empty($pconfig['blockpriv']) ? "checked=\"checked\"" : ""; ?> />
                             <div class="hidden" data-for="help_for_blockpriv">
-                              <?=gettext("When set, this option blocks traffic from IP addresses that are reserved " .
-                                "for private networks as per RFC 1918 (10/8, 172.16/12, 192.168/16) as well as loopback " .
-                                "addresses (127/8) and Carrier-grade NAT addresses (100.64/10). This option should only " .
+                              <?=gettext("When set, this option blocks traffic from IP addresses that are reserved for private networks " .
+                                "as per RFC 1918 as well as loopback, link-local and Carrier-grade NAT addresses. This option should only " .
                                 "be set for WAN interfaces that use the public IP address space.") ?>
                             </div>
                           </td>
@@ -2523,7 +2524,6 @@ include("head.inc");
                                 case '6rd':
                                 case '6to4':
                                 case 'dhcp6':
-                                case 'slaac':
                                     break;
                                 default:
                                     continue 2;

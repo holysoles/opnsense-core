@@ -37,6 +37,7 @@
 import os
 import json
 import time
+import re
 import errno
 import uuid
 import ipaddress
@@ -314,7 +315,7 @@ class DNSBL:
 
         return False
 
-    def policy_match(self, query: Query, qstate=None):
+    def policy_match(self, query: Query, qstate=None, orig=None):
         self._update_dnsbl()
 
         if not self.dnsbl_available:
@@ -323,7 +324,16 @@ class DNSBL:
         if not query.type in ('A', 'AAAA', 'CNAME', 'HTTPS'):
             return False
 
+        # if "orig" is defined, we know we are matching a CNAME.
+        # the CNAME may be blocked, while the original query is explicitly whitelisted.
+        # In these cases, the whitelisting should have priority since we don't expect
+        # users to trace the CNAMEs themselves.
         domain = query.domain.rstrip('.').lower()
+        if mod_env['context'].global_pass_regex:
+            r = mod_env['context'].global_pass_regex
+            if r.match(domain) or (orig and r.match(orig)):
+                return False
+
         sub = domain
         match = None
         while match is None:
@@ -360,6 +370,7 @@ class ModuleContext:
         self.env = env
         self.dst_addr = '0.0.0.0'
         self.rcode = RCODE_NOERROR
+        self.global_pass_regex = None
         if self.env:
             self.dnssec_enabled = 'validator' in self.env.cfg.module_conf
 
@@ -370,6 +381,15 @@ class ModuleContext:
         self.config = config
         self.dst_addr = self.config.get('dst_addr', '0.0.0.0')
         self.rcode = RCODE_NXDOMAIN if self.config.get('rcode') == 'NXDOMAIN' else RCODE_NOERROR
+        passlist =  self.config.get('global_passlist_regex', None)
+        if passlist:
+            # when a pass/white list is offered, we need to be absolutely sure we can use the regex.
+            # compile and skip when invalid.
+            try:
+                self.global_pass_regex = re.compile(passlist, re.IGNORECASE)
+            except re.error:
+                log_err("dnsbl_module: unable to compile regex in global_passlist_regex")
+                self.global_pass_regex = None
 
 def time_diff_ms(start):
     return round((time.time() - start) * 1000)
@@ -462,8 +482,9 @@ def set_answer_block(qstate, qdata, query, bl=None):
         return True
 
     ttl = 3600
+    # XXX AAAA
     msg = DNSMessage(query.domain, RR_TYPE_A, RR_CLASS_IN, PKT_QR | PKT_RA | PKT_AA)
-    if (query.type == 'A'):
+    if (query.type == 'A') or (query.type == 'CNAME'):
         msg.answer.append("%s %s IN A %s" % (query.domain, ttl, ctx.dst_addr))
     if not msg.set_return_msg(qstate):
         log_err("dnsbl_module: unable to create response for %s, dropping query" % query.domain)
@@ -526,17 +547,18 @@ def operate(id, event, qstate, qdata):
                                 for j in range(data.count):
                                     # temporarily change the queried domain name to the CNAME alias so we can apply our policy on it.
                                     # after we're done we change it back to the original query so as to not confuse users
-                                    # looking at the logged queries. We do however change the type to CNAME if a match is found
-                                    # to indicate that a CNAME was the reason for blocking this domain.
+                                    # looking at the logged queries.
                                     tmp = query.domain
                                     query.domain = dns.name.from_wire(data.rr_data[j], 2)[0].to_text(omit_final_dot=True)
-                                    match = mod_env['dnsbl'].policy_match(query, qstate)
+                                    match = mod_env['dnsbl'].policy_match(query, qstate, tmp)
                                     query.domain = tmp
                                     if match:
                                         # the iterator module has already resolved the answer and cached it,
                                         # make sure we remove it from the cache in order to block future queries for the same domain
                                         if obj_path_exists(qstate, 'return_msg.qinfo'):
                                             invalidateQueryInCache(qstate, qstate.return_msg.qinfo)
+                                        # change the type to CNAME if a match is found to indicate
+                                        # that a CNAME was the reason for blocking this domain.
                                         query.type = 'CNAME'
                                         if not set_answer_block(qstate, qdata, query, match.get('bl')):
                                             qstate.ext_state[id] = MODULE_ERROR

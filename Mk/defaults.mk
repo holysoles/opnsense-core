@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2024 Franco Fichtner <franco@opnsense.org>
+# Copyright (c) 2016-2025 Franco Fichtner <franco@opnsense.org>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -33,6 +33,7 @@ PKG=		true
 GIT!=		which git || echo true
 
 GITVERSION=	${.CURDIR}/Scripts/version.sh
+PLUGINCTL=	${.CURDIR}/src/sbin/pluginctl
 
 _CORE_ARCH!=	uname -p
 CORE_ARCH?=	${_CORE_ARCH}
@@ -67,6 +68,8 @@ _CORE_SYSLOGNG!=${PKG} query %v syslog-ng
 CORE_SYSLOGNG?=	${_CORE_SYSLOGNG:S/./ /g:[1..2]:tW:S/ /./g}
 .endif
 
+VERSIONFILE=	opnsense/version/core
+
 REPLACEMENTS=	CORE_ABI \
 		CORE_ARCH \
 		CORE_COMMIT \
@@ -74,6 +77,8 @@ REPLACEMENTS=	CORE_ABI \
 		CORE_COPYRIGHT_HOLDER \
 		CORE_COPYRIGHT_WWW \
 		CORE_COPYRIGHT_YEARS \
+		CORE_GID \
+		CORE_GROUP \
 		CORE_HASH \
 		CORE_MAINTAINER \
 		CORE_NAME \
@@ -87,6 +92,8 @@ REPLACEMENTS=	CORE_ABI \
 		CORE_SERIES \
 		CORE_SERIES_FW \
 		CORE_SYSLOGNG \
+		CORE_UID \
+		CORE_USER \
 		CORE_VERSION \
 		CORE_WWW
 
@@ -97,3 +104,13 @@ SED_REPLACE=	# empty
 MAKE_REPLACE+=	${REPLACEMENT}="${${REPLACEMENT}}"
 SED_REPLACE+=	-e "s=%%${REPLACEMENT}%%=${${REPLACEMENT}}=g"
 .endfor
+
+WRKDIR?=	${.CURDIR}/work
+MFCDIR?=	/tmp/mfc.dir
+PKGDIR?=	${WRKDIR}/pkg
+WRKSRC?=	${WRKDIR}/src
+TESTDIR?=	${.CURDIR}/src/opnsense/mvc/tests
+
+CORE_MAINS=	master main
+CORE_MAIN?=	${CORE_MAINS:[1]}
+CORE_STABLE?=	stable/${CORE_ABI}

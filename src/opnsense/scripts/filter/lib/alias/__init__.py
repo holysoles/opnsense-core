@@ -53,6 +53,7 @@ class Alias(object):
             :return: None
         """
         self._known_aliases = known_aliases
+        self._pf_addresses = 0
         self._is_changed = None
         self._has_expired = None
         # general alias properties, excluding content
@@ -94,6 +95,12 @@ class Alias(object):
         self._filename_alias_hash = '/var/db/aliastables/%s.md5.txt' % self._name
         # the generated alias contents, without dependencies
         self._filename_alias_content = '/var/db/aliastables/%s.self.txt' % self._name
+
+    def get_pf_addr_count(self):
+        return self._pf_addresses
+
+    def set_pf_addr_count(self, cnt):
+        self._pf_addresses = cnt
 
     def items(self):
         """ return unparsed (raw) alias entries without dependencies
@@ -157,26 +164,26 @@ class Alias(object):
             # in case the cache doesn't exist at all. Although this costs time, it's probably the safest option here.
             return self.resolve()
 
-        return list(self._resolve_content)
+        return self._resolve_content
 
     @staticmethod
     def read_alias_file(filename):
         """
         :param filename: filename to read (when it exists)
-        :return: string, empty when not found or not parseable
+        :return: string|bool, False when not found or not parseable
         """
         if os.path.isfile(filename):
             try:
                 return open(filename, 'r').read()
             except UnicodeDecodeError:
-                return ''
-        return ''
+                return False
+        return False
 
 
     def resolve(self, force=False):
         """ resolve (fetch) alias content, without dependencies.
             :force: force load
-            :return: string
+            :return: set
         """
         if not self._resolve_content:
             if self.expired() or self.changed() or force:
@@ -192,7 +199,7 @@ class Alias(object):
                         self._resolve_content = self._resolve_content.union(address_parser.resolve_dns())
                 except (IOError, DNSException) as e:
                     syslog.syslog(syslog.LOG_ERR, 'alias resolve error %s (%s)' % (self._name, e))
-                    self._resolve_content = set(undo_content.split("\n"))
+                    self._resolve_content = set(undo_content.split("\n")) if undo_content is not False else set()
 
                 resolve_content_str = '\n'.join(sorted(self._resolve_content))
                 if undo_content != resolve_content_str:
@@ -214,8 +221,9 @@ class Alias(object):
                         os.utime(self._filename_alias_hash, None)
             else:
                 self._resolve_content = set(open(self._filename_alias_content).read().split())
+
         # return the addresses and networks of this alias
-        return list(self._resolve_content)
+        return self._resolve_content
 
     def get_parser(self):
         """ fetch address parser to use, None if alias type is not handled here or only during pre processing
@@ -238,7 +246,7 @@ class Alias(object):
         else:
             return None
 
-    def pre_process(self):
+    def pre_process(self, skip_result=False):
         """ alias type pre processors
             :return: set initial alias content
         """
@@ -246,7 +254,7 @@ class Alias(object):
         if self.get_type() == 'interface_net':
             PF.flush_network(self.get_name(), self._properties['interface'])
         # collect current table contents for selected types
-        if self.get_type() in ['interface_net', 'external']:
+        if self.get_type() in ['interface_net', 'external'] and not skip_result:
             result = result.union(set(PF.list_table(self.get_name())))
 
         return result
@@ -262,6 +270,19 @@ class Alias(object):
             :return: string
         """
         return self._name
+
+    def get_filename(self):
+        """ return target filename for this alias content
+            :return: string
+        """
+        return '/var/db/aliastables/%s.txt' % self._name
+
+    def get_file_size(self):
+        """ return filesize in bytes of the full alias
+        """
+        if os.path.isfile(self.get_filename()):
+            return os.stat(self.get_filename()).st_size
+        return 0
 
     def get_deps(self):
         """ fetch alias dependencies
@@ -287,8 +308,10 @@ class AliasParser(object):
         self._aliases = dict()
         external_aliases = list()
         alias_parameters = dict()
+        alias_pf_stats = dict()
         alias_parameters['known_aliases'] = [x.text for x in self._source_tree.iterfind('table/name')]
-        for alias_name in PF.list_tables():
+        for alias_name, alias_info in PF.list_tables():
+            alias_pf_stats[alias_name] = alias_info
             if alias_name not in alias_parameters['known_aliases']:
                 alias_parameters['known_aliases'].append(alias_name)
                 external_aliases.append(alias_name)
@@ -302,6 +325,8 @@ class AliasParser(object):
         # loop through user defined aliases
         for elem in self._source_tree.iterfind('table'):
             alias = Alias(elem, **alias_parameters)
+            if alias.get_name() in alias_pf_stats:
+                alias.set_pf_addr_count(alias_pf_stats[alias.get_name()].get('addresses', 0))
             self._aliases[alias.get_name()] = alias
 
         # attach external aliases which aren't defined via the gui

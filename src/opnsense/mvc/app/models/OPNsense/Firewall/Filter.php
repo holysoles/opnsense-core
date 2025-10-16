@@ -92,6 +92,26 @@ class Filter extends BaseModel
                         }
                     }
 
+                    if ($rule->icmptype && !$rule->icmptype->isEmpty() && !in_array($rule->protocol, ['ICMP'])) {
+                        $messages->appendMessage(new Message(
+                            gettext("Option only applies to ICMP packets"),
+                            $rule->icmptype->__reference
+                        ));
+                    }
+
+                    if (strpos($rule->source_net, ',') !== false && $rule->source_not == '1') {
+                        $messages->appendMessage(new Message(
+                            gettext("Inverting sources is only allowed for single targets to avoid mis-interpretations"),
+                            $rule->source_not->__reference
+                        ));
+                    }
+                    if (strpos($rule->destination_net, ',') !== false && $rule->destination_not == '1') {
+                        $messages->appendMessage(new Message(
+                            gettext("Inverting destinations is only allowed for single targets to avoid mis-interpretations"),
+                            $rule->destination_net->__reference
+                        ));
+                    }
+
                     // Additional source nat validations
                     if ($rule->target !== null) {
                         $target_is_addr = Util::isSubnet($rule->target) || Util::isIpAddress($rule->target);
@@ -185,7 +205,7 @@ class Filter extends BaseModel
                     } elseif (
                         !empty((string)$rule->max) &&
                         !empty((string)$rule->adaptiveend) &&
-                        (int)$rule->max->getCurrentValue() > (int)$rule->adaptiveend->getCurrentValue()
+                        (int)$rule->max->getValue() > (int)$rule->adaptiveend->getValue()
                     ) {
                         $messages->appendMessage(new Message(
                             gettext("The value of adaptive.end must be greater than the Max states value."),
@@ -194,7 +214,7 @@ class Filter extends BaseModel
                     } elseif (
                         !empty((string)$rule->adaptivestart) &&
                         !empty((string)$rule->adaptiveend) &&
-                        (int)$rule->adaptivestart->getCurrentValue() > (int)$rule->adaptiveend->getCurrentValue()
+                        (int)$rule->adaptivestart->getValue() > (int)$rule->adaptiveend->getValue()
                     ) {
                         $messages->appendMessage(new Message(
                             gettext("The value of adaptive.end must be greater than adaptive.start value."),

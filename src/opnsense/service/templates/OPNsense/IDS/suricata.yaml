@@ -254,9 +254,13 @@ outputs:
             # output TLS transaction where the session is resumed using a
             # session id
             session-resumption: {{ 'no' if helpers.empty('OPNsense.IDS.general.eveLog.tls.sessionResumption') else 'yes' }}
+            # ja4 hashes in tls records will never be logged unless
+            # the following is set to on. (Default off)
+{%          set tls_custom = OPNsense.IDS.general.eveLog.tls.custom|default('') %}
+            ja4: {{ 'on' if not helpers.empty('OPNsense.IDS.general.eveLog.tls.extended') or 'ja4' in tls_custom.split(',') else 'off' }}
+{%          if tls_custom != '' %}
             # custom controls which TLS fields that are included in eve-log
-{%          if not helpers.empty('OPNsense.IDS.general.eveLog.tls.custom') %}
-            custom: [{{ OPNsense.IDS.general.eveLog.tls.custom }}]
+            custom: [{{ tls_custom }}]
 {%          endif %}
 {%      endif %}
         #- files:
@@ -923,9 +927,10 @@ app-layer:
       detection-ports:
         dp: 443
 
-      # Generate JA3 fingerprint from client hello. If not specified it
+      # Generate JA3/JA4 fingerprints from client hello. If not specified it
       # will be disabled by default, but enabled if rules require it.
       ja3-fingerprints: yes
+      ja4-fingerprints: yes
 
       # What to do when the encrypted communications start:
       # - default: keep tracking TLS session, check for protocol anomalies,
@@ -1740,7 +1745,6 @@ detect:
 #
 # The supported algorithms are:
 # "ac"      - Aho-Corasick, default implementation
-# "ac-bs"   - Aho-Corasick, reduced memory implementation
 # "ac-ks"   - Aho-Corasick, "Ken Steele" variant
 # "hs"      - Hyperscan, available when built with Hyperscan support
 #

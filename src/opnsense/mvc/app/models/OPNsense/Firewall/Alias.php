@@ -1,31 +1,29 @@
 <?php
 
-/**
- *    Copyright (C) 2018 Deciso B.V.
+/*
+ * Copyright (C) 2018 Deciso B.V.
+ * All rights reserved.
  *
- *    All rights reserved.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- *    Redistribution and use in source and binary forms, with or without
- *    modification, are permitted provided that the following conditions are met:
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
  *
- *    1. Redistributions of source code must retain the above copyright notice,
- *       this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
  *
- *    2. Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- *    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
- *    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
- *    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
- *    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- *    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- *    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- *    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- *    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *    POSSIBILITY OF SUCH DAMAGE.
- *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 namespace OPNsense\Firewall;
@@ -46,26 +44,10 @@ class Alias extends BaseModel
      */
     private $aliasIteratorCache = [];
 
-    private $skip_dynamic_info = false;
-
-    /**
-     * return if we're lazy loaded
-     */
-    public function skipDynamicInfo()
-    {
-        return $this->skip_dynamic_info;
-    }
-
     /**
      * alias name cache
      */
     private $aliasReferenceCache = [];
-
-    public function __construct($skip_dynamic_info = false)
-    {
-        $this->skip_dynamic_info = $skip_dynamic_info;
-        parent::__construct();
-    }
 
     public function performValidation($validateFullModel = false)
     {
@@ -165,7 +147,7 @@ class Alias extends BaseModel
                     foreach ($aliasref[1] as $cfgName) {
                         $node = $node->$cfgName;
                     }
-                    if ((string)$node == $name) {
+                    if (in_array($name, explode(',', (string)$node))) {
                         $ref = implode('.', $aliasref[0]) . "." . $nodeidx . "/" . implode('.', $aliasref[1]);
                         yield array($ref, &$inode, &$node);
                     }
@@ -222,11 +204,13 @@ class Alias extends BaseModel
         Util::attachAliasObject($this);
         // replace in legacy config
         foreach ($this->searchConfig($oldname) as $item) {
-            $item[2][0] = $newname;
+            $tmp = array_unique(explode(',', $item[2][0]));
+            $tmp[array_search($oldname, $tmp)] = $newname;
+            $item[2][0] = implode(',', $tmp);
         }
         // find all used in this model (alias nesting)
         foreach ($this->aliases->alias->iterateItems() as $alias) {
-            if (!in_array($alias->type, array('geoip', 'urltable'))) {
+            if (!$alias->type->isEqual('geoip')) {
                 $sepchar = $alias->content->getSeparatorChar();
                 $aliases = explode($sepchar, (string)$alias->content);
                 if (in_array($oldname, $aliases)) {

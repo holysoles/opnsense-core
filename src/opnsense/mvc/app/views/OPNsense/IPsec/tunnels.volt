@@ -88,7 +88,7 @@
           $applyLegacyConfig.prop('disabled', true);
           $applyLegacyConfigProgress.addClass('fa fa-spinner fa-pulse');
 
-          ajaxCall('/api/ipsec/legacy_subsystem/applyConfig', {}, function (data, status) {
+          ajaxCall('/api/ipsec/legacy_subsystem/apply_config', {}, function (data, status) {
               // Preliminarily hide the "pending changes" alert and display the response message if available
               if (data['message']) {
                 $dirtySubsystemMsg.addClass('hidden');
@@ -149,6 +149,7 @@
               formatters: formatters,
               multiSelect: false,
               rowSelect: true,
+              rowCount: [7, 20, 50, 100, 200, 500, -1],
               selection: true
           }
       }).on("selected.rs.jquery.bootgrid", function(e, rows) {
@@ -175,6 +176,7 @@
           toggle: '/api/ipsec/tunnel/toggle_phase2/',
           options: {
               formatters: formatters,
+              rowCount: [7, 20, 50, 100, 200, 500, -1],
               useRequestHandlerOnGet: true,
               requestHandler: function(request) {
                   let ids = $("#grid-phase1").bootgrid("getSelectedRows");
@@ -228,6 +230,14 @@
 </style>
 
 
+<div class="alert alert-warning" role="alert">
+    <strong>
+        <?php $eol_this_month = explode('.', shell_exec('opnsense-version -nv') ?? '')[1] ?? '1';?>
+        <?=sprintf(
+            gettext("This component is reaching the end of the line, official maintenance will end as of version %s"),
+            in_array($eol_this_month, ['1', '7']) ? '26.1' : '26.4');?>
+    </strong>
+</div>
 <div class="alert alert-info alert-dismissible hidden" role="alert" id="responseMsg"></div>
 <div class="alert alert-info hidden" role="alert" id="dirtySubsystemMsg">
     <button class="btn btn-primary pull-right" type="button" id="applyLegacyConfig">
@@ -261,7 +271,7 @@
         <tr>
             <td colspan=7></td>
             <td>
-                <button data-action="add" type="button" title="{{ lang._('add phase 1 entry') }}" data-scope="phase1" class="btn btn-xs btn-primary legacy_action command-add">
+                <button type="button" title="{{ lang._('add phase 1 entry') }}" data-scope="phase1" class="btn btn-xs btn-primary legacy_action command-add">
                     <span class="fa fa-fw fa-plus"></span>
                 </button>
                 {# multi select isn't supported on master/detail views

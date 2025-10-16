@@ -84,16 +84,17 @@
                     $(".xmlrpc_srv_status_act").each(function(){
                         switch($(this).data('service_action')) {
                             case 'start':
-                                $(this).tooltip({title: "{{ lang._('Start') | safe}}"});
+                                $(this).tooltip({title: "{{ lang._('Start') | safe}}", container: "body", trigger: "hover"});
                                 break;
                             case 'restart':
-                                $(this).tooltip({title: "{{ lang._('Restart') | safe}}"});
+                                $(this).tooltip({title: "{{ lang._('Synchronize and Restart') | safe}}", container: "body", trigger: "hover"});
                                 break;
                             case 'stop':
-                                $(this).tooltip({title: "{{ lang._('Stop') | safe}}"});
+                                $(this).tooltip({title: "{{ lang._('Stop') | safe}}", container: "body", trigger: "hover"});
                                 break;
                         }
-                        $(this).click(function(){
+                        $(this).click(function(event){
+                            event.stopPropagation();
                             if ($(this).hasClass('locked')) {
                                 return;
                             }
@@ -110,20 +111,39 @@
                 $("#status_error").show();
             }
             $("#status_query").hide();
-        });
-        $("#act_restart_all").click(function(){
-            let icon = $(this).find('i');
-            if (icon.hasClass('spinner')) {
-                return;
-            }
-            icon.removeClass('fa-repeat').addClass('fa-spinner fa-pulse');
-            ajaxCall('/api/core/hasync_status/restart_all', {}, function(data){
-                icon.removeClass('fa-spinner fa-pulse').addClass('fa-repeat');
-                $('#grid_services').bootgrid('reload');
+
+            $("#grid_services-header > .row > .actionBar").prepend($(`
+                <div id="sync_container">
+                    <span>{{ lang._('Synchronize and reconfigure all') }}</span>
+                    <span id="act_restart_all" class="btn btn-xs btn-default" data-toggle="tooltip"
+                        title="{{ lang._('Synchronize and restart all services') }}">
+                        <i class="fa fa-repeat fa-fw"></i>
+                    </span>
+                </div>
+            `));
+
+            $("#act_restart_all").click(function () {
+                let icon = $(this).find('i');
+                if (icon.hasClass('spinner')) {
+                    return;
+                }
+                icon.removeClass('fa-repeat').addClass('fa-spinner fa-pulse');
+                ajaxCall('/api/core/hasync_status/restart_all', {}, function(data){
+                    icon.removeClass('fa-spinner fa-pulse').addClass('fa-repeat');
+                    $('#grid_services').bootgrid('reload');
+                });
             });
+
         });
     });
 </script>
+<style>
+    #grid_services-header .actionBar #act_restart_all {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        align-self: center !important;
+    }
+</style>
 <section class="page-content-main">
     <div class="container-fluid">
         <div class="row">
@@ -177,16 +197,6 @@
                                 </thead>
                                 <tbody>
                                 </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td><span style="padding-left: 30px;"> {{ lang._('Synchronize and reconfigure all') }} </span></td>
-                                        <td>
-                                            <span id="act_restart_all" class="btn btn-xs btn-default" data-toggle="tooltip" title="{{ lang._('Restart all services') }}">
-                                                <i class="fa fa-repeat fa-fw"></i>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                </tfoot>
                             </table>
                         </div>
                     </div>

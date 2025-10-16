@@ -69,7 +69,7 @@ export default class Firewall extends BaseTableWidget {
         $container.append($(`
             <div class="fw-chart-container">
                 <div class="canvas-container">
-                    <canvas id="fw-chart"></canvas>
+                    <canvas id="fw-chart" style="display: inline-block"></canvas>
                 </div>
             </div>
         `));
@@ -172,10 +172,10 @@ export default class Firewall extends BaseTableWidget {
     }
 
     async onMarkupRendered() {
-        const data = await this.ajaxCall('/api/diagnostics/interface/getInterfaceNames');
+        const data = await this.ajaxCall('/api/diagnostics/interface/get_interface_names');
         this.ifMap = data;
 
-        super.openEventSource('/api/diagnostics/firewall/streamLog', this._onMessage.bind(this));
+        super.openEventSource('/api/diagnostics/firewall/stream_log', this._onMessage.bind(this));
 
         let context = document.getElementById('fw-chart').getContext('2d');
         let config = {
@@ -208,6 +208,9 @@ export default class Firewall extends BaseTableWidget {
                     event.native.target.style.cursor = elements[0] ? 'pointer' : 'grab';
                 },
                 plugins: {
+                    colorschemes: {
+                        scheme: 'tableau.Classic10'
+                    },
                     legend: {
                         display: true,
                         position: 'left',

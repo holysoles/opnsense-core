@@ -133,6 +133,34 @@ class KeaDhcpv4 extends BaseModel
         return $hostname;
     }
 
+    /**
+     * @param FieldType $node node to iterate
+     * @param bool $defaults add defaults when set
+     * @return array
+     */
+    private function collectOptionData($node, $defaults = false)
+    {
+        $result = [];
+        foreach ($node->iterateItems() as $key => $value) {
+            $target_fieldname = str_replace('_', '-', $key);
+            if ((string)$value != '') {
+                if ($key == 'static_routes') {
+                    $value = implode(',', array_map('trim', explode(',', $value)));
+                }
+                $result[] = [
+                    'name' => $target_fieldname,
+                    'data' => (string)$value
+                ];
+            } elseif ($key == 'domain_name' && $defaults) {
+                $result[] = [
+                    'name' => $target_fieldname,
+                    'data' => (string)Config::getInstance()->object()->system->domain
+                ];
+            }
+        }
+        return $result;
+    }
+
     private function getConfigSubnets()
     {
         $result = [];
@@ -143,25 +171,10 @@ class KeaDhcpv4 extends BaseModel
                 'subnet' => (string)$subnet->subnet,
                 'next-server' => (string)$subnet->next_server,
                 'match-client-id' => !empty((string)$subnet->{'match-client-id'}),
-                'option-data' => [],
+                'option-data' => $this->collectOptionData($subnet->option_data, true),
                 'pools' => [],
                 'reservations' => []
             ];
-            /* standard option-data elements */
-            foreach ($subnet->option_data->iterateItems() as $key => $value) {
-                $target_fieldname = str_replace('_', '-', $key);
-                if ((string)$value != '') {
-                    $record['option-data'][] = [
-                        'name' => $target_fieldname,
-                        'data' => (string)$value
-                    ];
-                } elseif ($key == 'domain_name') {
-                    $record['option-data'][] = [
-                        'name' => $target_fieldname,
-                        'data' => (string)Config::getInstance()->object()->system->domain
-                    ];
-                }
-            }
             /* add pools */
             foreach (array_filter(explode("\n", $subnet->pools)) as $pool) {
                 $record['pools'][] = ['pool' => $pool];
@@ -172,16 +185,39 @@ class KeaDhcpv4 extends BaseModel
                     continue;
                 }
                 $res = [];
-                foreach (['hw_address', 'ip_address', 'hostname'] as $key) {
+                foreach (['ip_address', 'hostname'] as $key) {
                     if (!empty((string)$reservation->$key)) {
                         $res[str_replace('_', '-', $key)] = (string)$reservation->$key;
                     }
                 }
+                if (!$reservation->hw_address->isEmpty()) {
+                    $res['hw-address'] = str_replace('-', ':', $reservation->hw_address);
+                }
+
+                // Add DHCP option-data elements for reservations
+                $optdata = $this->collectOptionData($reservation->option_data);
+                if (!empty($optdata)) {
+                    $res['option-data'] = $optdata;
+                }
+
                 $record['reservations'][] = $res;
             }
             $result[] = $record;
         }
         return $result;
+    }
+
+    private function getExpiredLeasesProcessingConfig()
+    {
+        $config = [];
+        $lexpireFields = iterator_to_array($this->lexpire->iterateItems());
+        foreach ($lexpireFields as $fieldName => $fieldValue) {
+            if (!$fieldValue->isEqual('')) {
+                $keaFieldName = str_replace('_', '-', $fieldName);
+                $config[$keaFieldName] = (int)$fieldValue->getValue();
+            }
+        }
+        return empty($config) ? null : $config;
     }
 
     public function generateConfig($target = '/usr/local/etc/kea/kea-dhcp4.conf')
@@ -199,7 +235,7 @@ class KeaDhcpv4 extends BaseModel
                 ],
                 'control-socket' => [
                     'socket-type' => 'unix',
-                    'socket-name' => '/var/run/kea4-ctrl-socket'
+                    'socket-name' => '/var/run/kea/kea4-ctrl-socket'
                 ],
                 'loggers' => [
                     [
@@ -215,7 +251,11 @@ class KeaDhcpv4 extends BaseModel
                 'subnet4' => $this->getConfigSubnets(),
             ]
         ];
-        if (!empty((string)(new KeaCtrlAgent())->general->enabled)) {
+        $expiredLeasesConfig = $this->getExpiredLeasesProcessingConfig();
+        if ($expiredLeasesConfig !== null) {
+            $cnf['Dhcp4']['expired-leases-processing'] = $expiredLeasesConfig;
+        }
+        if (!(new KeaCtrlAgent())->general->enabled->isEmpty()) {
             $cnf['Dhcp4']['hooks-libraries'] = [];
             $cnf['Dhcp4']['hooks-libraries'][] = [
                 'library' => '/usr/local/lib/kea/hooks/libdhcp_lease_cmds.so'

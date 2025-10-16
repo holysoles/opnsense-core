@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2014-2024 Deciso B.V.
+ * Copyright (C) 2014-2025 Deciso B.V.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,18 +30,20 @@ require_once 'AppConfig.php';
 
 return new OPNsense\Core\AppConfig([
     'application' => [
+        'baseUri'        => '/opnsense_gui/',
         'controllersDir' => __DIR__ . '/../../app/controllers/',
         'modelsDir'      => __DIR__ . '/../../app/models/',
         'viewsDir'       => __DIR__ . '/../../app/views/',
         'pluginsDir'     => __DIR__ . '/../../app/plugins/',
         'libraryDir'     => __DIR__ . '/../../app/library/',
-        'cacheDir'       => __DIR__ . '/../../app/cache/',
-        'baseUri'        => '/opnsense_gui/',
+        'contribDir'     => __DIR__ . '/../../../contrib',
+        'cacheDir'       => '/var/lib/php/cache',
+        'tempDir'        => '/var/lib/php/tmp',
+        'configDir'      => '/conf',
     ],
     'globals' => [
-        'config_path'    => '/conf/',
-        'temp_path'      => '/tmp/',
         'debug'          => false,
+        'owner'          => 'wwwonly:wheel',
         'simulate_mode'  => false,
     ],
 ]);

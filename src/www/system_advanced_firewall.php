@@ -530,16 +530,16 @@ include("head.inc");
                 <td>
                   <select onchange="update_description(this.selectedIndex);" name="pfdebug" id="pfdebug" class="selectpicker" data-style="btn-default">
                     <option value="none"<?=$pconfig['pfdebug']=="none" ? " selected=\"selected\"" : ""; ?>>
-                      <?=gettext("Don't generate debug messages");?>
+                      <?=gettext("Do not generate debug messages (none)");?>
                     </option>
                     <option value="urgent"<?=$pconfig['pfdebug']=="urgent" ? " selected=\"selected\"" : ""; ?>>
-                      <?=gettext("Generate debug messages only for serious errors.");?>
+                      <?=gettext("Generate debug messages only for serious errors (urgent)");?>
                     </option>
                     <option value="misc"<?=$pconfig['pfdebug']=="misc" ? " selected=\"selected\"" : ""; ?>>
-                      <?=gettext("Generate debug messages for various errors.");?>
+                      <?=gettext("Generate debug messages for various errors (misc)");?>
                     </option>
                     <option value="loud"<?=$pconfig['pfdebug']=="loud" ? " selected=\"selected\"" : ""; ?>>
-                      <?=gettext("Generate debug messages for common conditions.");?>
+                      <?=gettext("Generate debug messages for common conditions (loud)");?>
                     </option>
                   </select>
                   <div class="hidden" data-for="help_for_pfdebug">
@@ -649,7 +649,7 @@ include("head.inc");
                   <input name="maximumstates" type="text" id="maximumstates" value="<?=$pconfig['maximumstates'];?>" />
                   <div class="hidden" data-for="help_for_maximumstates">
                     <?=gettext("Maximum number of connections to hold in the firewall state table.");?><br/>
-                    <?=gettext("Note: Leave this blank for the default. On your system the default size is:");?> <?= default_state_size() ?>
+                    <?=gettext("Note: Leave this blank for the default. On your system the default size is:");?> <?= filter_default_state_size() ?>
                   </div>
                 </td>
               </tr>
@@ -672,7 +672,7 @@ include("head.inc");
                     <?=gettext("Note: Leave this blank for the default.");?>
 <?php
                      if (empty($pconfig['maximumtableentries'])) :?>
-                        <?= gettext("On your system the default size is:");?> <?= default_table_entries_size(); ?>
+                        <?= gettext("On your system the default size is:");?> <?= filter_default_table_entries(); ?>
 <?php
                       endif;?>
                   </div>

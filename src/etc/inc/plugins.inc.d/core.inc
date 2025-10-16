@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2018-2022 Deciso B.V.
+ * Copyright (C) 2018-2025 Deciso B.V.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,33 +31,6 @@ function core_services()
     global $config;
 
     $services = array();
-
-    if (isset($config['OPNsense']['captiveportal']['zones']['zone'])) {
-        $enabled = false;
-        if (!empty($config['OPNsense']['captiveportal']['zones']['zone']['enabled'])) {
-            // single zone and enabled
-            $enabled = true;
-        } else {
-            // possible more zones, traverse items
-            foreach ($config['OPNsense']['captiveportal']['zones']['zone'] as $zone) {
-                if (!empty($zone['enabled'])) {
-                    $enabled = true;
-                }
-            }
-        }
-        if ($enabled) {
-            $services[] = array(
-                'pidfile' => '/var/run/lighttpd-api-dispatcher.pid',
-                'description' => gettext('Captive Portal'),
-                'configd' => array(
-                    'restart' => array('captiveportal restart'),
-                    'start' => array('captiveportal start'),
-                    'stop' => array('captiveportal stop'),
-                ),
-                'name' => 'captiveportal',
-            );
-        }
-    }
 
     $services[] = array(
         'description' => gettext('System Configuration Daemon'),
@@ -108,16 +81,18 @@ function core_services()
         'name' => 'cron',
     );
 
-    $services[] = array(
+    $services[] = [
         'description' => gettext('Syslog-ng Daemon'),
-        'php' => array(
-            'stop' => array('system_syslog_stop'),
-            'start' => array('system_syslog_start'),
-            'restart' => array('system_syslog_start')
-        ),
+        'php' => [
+            'start' => ['system_syslog_start'],
+            'restart' => ['system_syslog_start'],
+        ],
+        'configd' => [
+            'stop' => ['syslog stop'],
+        ],
         'pidfile' => '/var/run/syslog-ng.pid',
         'name' => 'syslog-ng',
-    );
+    ];
 
     return $services;
 }
@@ -289,10 +264,18 @@ function core_cron()
     $jobs = array();
 
     $jobs[]['autocron'] = array('/usr/local/sbin/configctl -d syslog archive', '1');
-    $jobs[]['autocron'] = array('/usr/local/sbin/expiretable -v -t 3600 sshlockout', '2');
-    $jobs[]['autocron'] = array('/usr/local/sbin/expiretable -v -t 3600 virusprot', '3');
     $jobs[]['autocron'] = array('/usr/local/sbin/ping_hosts.sh', '*/4');
     $jobs[]['autocron'] = array('/usr/local/sbin/configctl -d firmware changelog cron', '0', '22');
+
+    foreach ((new \OPNsense\Firewall\Alias(true))->aliases->alias->iterateItems() as $alias) {
+        if ($alias->type->isEqual('external') && !$alias->expire->isEmpty()) {
+            $cmd = [exec_safe("/sbin/pfctl -t %s -T expire %s", [$alias->name, $alias->expire])];
+            if ($alias->expire->asFloat() >= 3600) {
+                $cmd[] = '0,15,30,45';  /* every 15 minute cleanup */
+            }
+            $jobs[]['autocron'] = $cmd;
+        }
+    }
 
     /**
      * rrd graph collector, only schedule execution when enabled
@@ -328,14 +311,6 @@ function core_cron()
         );
     }
 
-    if (!empty($config['system']['captiveportalbackup']) && $config['system']['captiveportalbackup'] > 0) {
-        $jobs[]['autocron'] = array(
-            '/usr/local/etc/rc.syshook.d/backup/20-captiveportal',
-            '0',
-            '*/' . $config['system']['captiveportalbackup']
-        );
-    }
-
     foreach ((new OPNsense\Backup\BackupFactory())->listProviders() as $classname => $provider) {
         if ($provider['handle']->isEnabled()) {
             $jobs[]['autocron'] = array('/usr/local/sbin/configctl -d system remote backup 3600', 0, 1);
@@ -343,7 +318,7 @@ function core_cron()
         }
     }
 
-    if (!empty((string)(new OPNsense\Trust\General())->fetch_crls)) {
+    if (!(new OPNsense\Trust\General())->fetch_crls->isEmpty()) {
         $jobs[]['autocron'] = array('/usr/local/sbin/configctl -d system trust download_crls', '1');
     }
 
@@ -357,9 +332,9 @@ function core_syslog()
     $logfacilities['audit'] = ['facility' => ['audit']];
     $logfacilities['configd'] = ['facility' => ['configd.py']];
     $logfacilities['dhcpd'] = ['facility' => ['dhcpd']];
+    $logfacilities['kernel'] = ['facility' => ['kernel']];
     $logfacilities['lighttpd'] = ['facility' => ['lighttpd']];
     $logfacilities['pkg'] = ['facility' => ['pkg', 'pkg-static']];
-    $logfacilities['portalauth'] = ['facility' => ['captiveportal']];
     $logfacilities['ppps'] = ['facility' => ['ppp']];
     $logfacilities['resolver'] = ['facility' => ['unbound']];
     $logfacilities['routing'] = ['facility' => ['routed', 'olsrd', 'zebra', 'ospfd', 'bgpd', 'miniupnpd']];
@@ -368,96 +343,75 @@ function core_syslog()
     return $logfacilities;
 }
 
-/**
- *  sync configuration via xmlrpc
- * @return array
- */
 function core_xmlrpc_sync()
 {
-    $result = array();
+    $result = [];
 
-    $result[] = array(
+    $result[] = [
         'description' => gettext('Users and Groups'),
         'help' => gettext('Synchronize the users and groups over to the other HA host.'),
         'section' => 'system.user,system.group',
         'id' => 'users',
-        'services' => ["login"],
-    );
-    $result[] = array(
-        'description' => gettext('Auth Servers'),
+        'services' => ['login'],
+    ];
+
+    $result[] = [
+        'description' => gettext('Authentication Servers'),
         'help' => gettext('Synchronize the authentication servers (e.g. LDAP, RADIUS) over to the other HA host.'),
         'section' => 'system.authserver',
         'id' => 'authservers',
-        'services' => ["login"],
-    );
-    $result[] = array(
-        'description' => gettext('Certificates'),
+        'services' => ['login'],
+    ];
+
+    $result[] = [
+        'description' => gettext('Certificates and Authorities'),
         'help' => gettext('Synchronize the Certificate Authorities, Certificates, and Certificate Revocation Lists over to the other HA host.'),
         'section' => 'cert,ca,crl',
         'id' => 'certs',
-    );
-    $result[] = array(
-        'description' => gettext('DHCPD'),
-        'help' => gettext('Synchronize the DHCP Server settings over to the other HA host. This only applies to DHCP for IPv4.'),
-        'section' => 'dhcpd',
-        'id' => 'dhcpd',
-        'services' => ["dhcpd"],
-    );
-    $result[] = array(
-        'description' => gettext('DHCPDv6'),
-        'help' => gettext('Synchronize DHCPv6 including router advertisements.'),
-        'section' => 'dhcpdv6',
-        'id' => 'dhcpdv6',
-        'services' => ["dhcpdv6", "radvd"],
-    );
-    $result[] = array(
+    ];
+
+    $result[] = [
         'description' => gettext('Virtual IPs'),
         'help' => gettext('Synchronize the CARP Virtual IPs to the other HA host.'),
         'section' => 'virtualip',
         'id' => 'virtualip',
-    );
-    $result[] = array(
+    ];
+
+    $result[] = [
         'description' => gettext('Static Routes'),
         'help' => gettext('Synchronize the Static Route configuration and Gateways to the other HA host.'),
         'section' => 'staticroutes,gateways,OPNsense.Gateways',
         'id' => 'staticroutes',
-        'services' => ["routing", "dpinger"],
-    );
-    $result[] = array(
-        'description' => gettext('Network Time'),
-        'section' => 'ntpd,system.timeservers',
-        'id' => 'ntpd',
-        'services' => ["ntpd"],
-    );
-    $result[] = array(
-        'description' => gettext('Syslog'),
+        'services' => ['routing', 'dpinger'],
+    ];
+
+    $result[] = [
+        'description' => gettext('System logging'),
         'section' => 'syslog,OPNsense.Syslog',
         'id' => 'syslog',
-        'services' => ["syslogd"],
-    );
-    $result[] = array(
+        'services' => ['syslogd'],
+    ];
+
+    $result[] = [
         'description' => gettext('Cron'),
         'section' => 'OPNsense.cron',
         'id' => 'cron',
-        'services' => ["cron"],
-    );
-    $result[] = array(
+        'services' => ['cron'],
+    ];
+
+    $result[] = [
         'description' => gettext('System Tunables'),
         'section' => 'sysctl',
         'id' => 'sysctl',
-        'services' => ["sysctl"],
-    );
-    $result[] = array(
+        'services' => ['sysctl'],
+    ];
+
+    $result[] = [
         'description' => gettext('Web GUI'),
         'section' => 'system.webgui',
         'id' => 'webgui',
-        'services' => ["webgui"],
-    );
-    $result[] = array(
-        'description' => gettext('Backup - Google Drive'),
-        'section' => 'system.remotebackup',
-        'id' => 'remotebackup'
-    );
+        'services' => ['webgui'],
+    ];
 
     return $result;
 }
@@ -466,13 +420,14 @@ function core_configure()
 {
     return [
         /* XXX these are all specialized and try to avoid extra script use */
+        'cache_flush' => ['system_cache_flush'],
+        'crl' => ['core_trust_crl'],
         'dns_reload' => ['system_resolver_configure'],
         'firmware_reload' => ['system_firmware_configure'],
         'route_reload' => ['system_routing_configure:2'],
         'syslog_reset' => ['system_syslog_reset'],
         'trust_reload' => ['system_trust_configure'],
         'user_changed' => ['core_user_changed_groups:2'],
-        'crl' => ['core_trust_crl'],
     ];
 }
 

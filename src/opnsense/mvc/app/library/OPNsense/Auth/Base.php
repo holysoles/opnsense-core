@@ -65,7 +65,7 @@ abstract class Base
                 foreach ($cnf->system->group as $group) {
                     if (isset($group->member)) {
                         foreach ($group->member as $member) {
-                            if ((string)$uid == (string)$member) {
+                            if (in_array((string)$uid, explode(',', $member))) {
                                 $groups[] = (string)$group->gid;
                                 break;
                             }
@@ -156,7 +156,8 @@ abstract class Base
             foreach ($cnf->system->group as $group) {
                 $known_groups[] = strtolower((string)$group->name);
                 // when user is known, collect current groups
-                if ($user != null && in_array((string)$user->uid, (array)$group->member)) {
+                $group_members = explode(',', implode(',', (array)$group->member));
+                if ($user != null && in_array((string)$user->uid, $group_members)) {
                     $user_groups[] = strtolower((string)$group->name);
                 }
             }
@@ -267,6 +268,11 @@ abstract class Base
     protected function _authenticate($username, $password)
     {
         return false;
+    }
+
+    public function preauth($config)
+    {
+        return $this;
     }
 
     /**

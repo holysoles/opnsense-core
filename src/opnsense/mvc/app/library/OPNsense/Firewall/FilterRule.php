@@ -134,7 +134,7 @@ class FilterRule extends Rule
                     $rule['reply'] = "reply-to {$if} ";
                 }
             }
-        } elseif (!isset($rule['disablereplyto']) && ($rule['direction'] ?? "") != 'any') {
+        } elseif (!isset($rule['disablereplyto']) && ($rule['direction'] ?? "") != 'any' && empty($rule['interfacenot'])) {
             $proto = $rule['ipprotocol'];
             if (!empty($this->interfaceMapping[$rule['interface']]['if']) && empty($rule['gateway'])) {
                 $if = $this->interfaceMapping[$rule['interface']]['if'];
@@ -352,7 +352,7 @@ class FilterRule extends Rule
     }
     public function isUIFromNot()
     {
-        return isset($this->rule['source']) && isset($this->rule['source']['not']);
+        return (isset($this->rule['source']) && isset($this->rule['source']['not'])) || !empty($this->rule['from_not']);
     }
     public function getUIFromPort()
     {
@@ -378,7 +378,7 @@ class FilterRule extends Rule
     }
     public function isUIToNot()
     {
-        return isset($this->rule['destination']) && isset($this->rule['destination']['not']);
+        return isset($this->rule['destination']) && isset($this->rule['destination']['not']) || !empty($this->rule['to_not']);
     }
     public function getUIToPort()
     {

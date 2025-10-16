@@ -34,13 +34,10 @@ require_once("auth.inc");
 $authFactory = new \OPNsense\Auth\AuthenticationFactory();
 $authCNFOptions = $authFactory->listConfigOptions();
 
-config_read_array('system', 'authserver');
 config_read_array('ca');
 
-$a_server = [];
-foreach (auth_get_authserver_list() as $servers) {
-    $a_server[] = $servers;
-}
+$a_server = config_read_array('system', 'authserver');
+$a_server[] = ['name' => gettext('Local Database'),'type' => 'local'];
 
 $act = null;
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -106,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $pconfig['radius_acct_port'] = $a_server[$id]['radius_acct_port'] ?? '';
             $pconfig['radius_secret'] = $a_server[$id]['radius_secret'] ?? '';
             $pconfig['radius_timeout'] = $a_server[$id]['radius_timeout'] ?? '';
+            $pconfig['radius_stationid'] = $a_server[$id]['radius_stationid'] ?? '';
 
             if (!empty($pconfig['radius_auth_port']) &&
                 !empty($pconfig['radius_acct_port'])) {
@@ -228,6 +226,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
           $input_errors[] = gettext('Invalid server name given.');
       }
 
+      if (!empty($pconfig['sync_create_local_users']) && empty($pconfig['sync_default_groups']) &&  empty($pconfig['sync_memberof'])) {
+          $input_errors[] = gettext('In order to automatically create users, a group policy needs to be configured (either choosing default groups and/or fetching the ones from the provider with the Synchronize groups option) otherwise you will end up with empty users.');
+      }
+
       if (count($input_errors) == 0) {
           $server = [];
           $server['refid'] = uniqid();
@@ -276,6 +278,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                   $server['radius_timeout'] = $pconfig['radius_timeout'];
               } else {
                   $server['radius_timeout'] = 5;
+              }
+
+              if (!empty($pconfig['radius_stationid'])) {
+                  $server['radius_stationid'] = $pconfig['radius_stationid'];
+              } else {
+                  unset($server['radius_stationid']);
               }
 
               if ($pconfig['radius_srvcs'] == "both") {
@@ -362,6 +370,7 @@ $all_authfields = [
     'radius_secret',
     'radius_srvcs',
     'radius_timeout',
+    'radius_stationid',
     'sync_create_local_users',
     'sync_memberof',
     'sync_memberof_constraint',
@@ -854,6 +863,17 @@ endif; ?>
                     </div>
                   </td>
                 </tr>
+                <tr class="auth_radius auth_options hidden">
+                  <td><a id="help_for_radius_stationid" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Called Station ID");?></td>
+                  <td>
+                    <input name="radius_stationid" type="text" id="radius_stationid" size="20" value="<?=$pconfig['radius_stationid'];?>"/>
+                    <div class="hidden" data-for="help_for_radius_stationid">
+                      <br /><?= gettext("This value serves as a unique identifier for this NAS. This value typically contains a MAC address, optionally appended with a known SSID or FQDN, separated by a \":\".") ?>
+                      <br /><?= gettext("The MAC address can be any uniquely associated with this machine, but typically the MAC address facing the RADIUS server is used.") ?>
+                      <br /><?= gettext("For example: 00:1A:2B:3C:4F:5E:opnsense.localdomain") ?>
+                    </div>
+                  </td>
+                </tr>
                 <tr class="auth_ldap auth_radius auth_ldap-totp auth_options hidden">
                   <td><a id="help_for_sync_memberof" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext('Synchronize groups'); ?></td>
                   <td>
@@ -892,7 +912,7 @@ endif; ?>
                   </td>
                 </tr>
                 <tr class="auth_ldap auth_radius auth_ldap-totp auth_options hidden">
-                  <td><a id="help_for_sync_memberof_groups" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext('Limit groups'); ?></td>
+                  <td><a id="help_for_sync_memberof_groups" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext('Limit groups (Scope)'); ?></td>
                   <td>
                     <select name='sync_memberof_groups[]' id="sync_memberof_groups" class="selectpicker" multiple="multiple">
 <?php

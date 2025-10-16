@@ -324,7 +324,7 @@ class Config extends Singleton
     protected function init()
     {
         $this->statusIsLocked = false;
-        $this->config_file = (new AppConfig())->globals->config_path . "config.xml";
+        $this->config_file = (new AppConfig())->application->configDir . '/config.xml';
         try {
             $this->load();
         } catch (\Exception $e) {
@@ -345,9 +345,12 @@ class Config extends Singleton
                     }
                 }
             }
-            // in case there are no backups, restore defaults.
+
+            /* in case there are no backups, restore defaults */
             $logger->error(gettext('No valid config.xml found, attempting to restore factory config.'));
             $this->restoreBackup('/usr/local/etc/config.xml');
+            @chown($this->config_file, 'wwwonly'); /* XXX frontend owns file */
+            @chgrp($this->config_file, 'wheel'); /* XXX backend can work with it */
         }
     }
 
@@ -486,7 +489,7 @@ class Config extends Singleton
                 }
             }
         }
-        $revision['time'] = microtime(true);
+        $revision['time'] = sprintf('%0.2f', microtime(true));
 
         return $revision;
     }
@@ -507,7 +510,7 @@ class Config extends Singleton
     /**
      * update config revision information (ROOT.revision tag)
      * @param array|null $revision revision tag (associative array)
-     * @param \SimpleXMLElement|null pass trough xml node
+     * @param \SimpleXMLElement|null pass through xml node
      * @return array revision data
      */
     private function updateRevision($revision, $node = null, $timestamp = null)
@@ -515,6 +518,8 @@ class Config extends Singleton
         /* If revision info is not provided, create one. $revision is used for recursion */
         if (!is_array($revision)) {
             $revision = $this->getRevisionContext();
+        } else {
+            $revision = array_merge($this->getRevisionContext(), $revision);
         }
         if ($node == null) {
             if (!isset($this->simplexml->revision)) {

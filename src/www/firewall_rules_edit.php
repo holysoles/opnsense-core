@@ -154,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
         }
         $pconfig['category'] = !empty($pconfig['category']) ? explode(",", $pconfig['category']) : [];
+        $pconfig['icmptype'] = !empty($pconfig['icmptype']) ? explode(",", $pconfig['icmptype']) : [];
 
         // process fields with some kind of logic
         address_to_pconfig(
@@ -192,6 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
         $pconfig['src'] = "any";
         $pconfig['dst'] = "any";
+        $pconfig['icmptype'] = [];
     }
 
     // initialize empty fields
@@ -316,6 +318,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
     if (strpos($pconfig['src'], ',') > 0) {
+        if (!empty($pconfig['srcnot'])) {
+            $input_errors[] = gettext("Inverting sources is only allowed for single targets to avoid mis-interpretations");
+        }
         foreach (explode(',', $pconfig['src']) as $tmp) {
             if (!is_specialnet($tmp) && !is_alias($tmp)) {
                $input_errors[] = sprintf(gettext("%s is not a valid source alias."), $tmp);
@@ -325,6 +330,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $input_errors[] = sprintf(gettext("%s is not a valid source IP address or alias."),$pconfig['src']);
     }
     if (strpos($pconfig['dst'], ',') > 0) {
+      if (!empty($pconfig['dstnot'])) {
+          $input_errors[] = gettext("Inverting destinations is only allowed for single targets to avoid mis-interpretations");
+      }
       foreach (explode(',', $pconfig['dst']) as $tmp) {
           if (!is_specialnet($tmp) && !is_alias($tmp)) {
              $input_errors[] = sprintf(gettext("%s is not a valid destination alias."), $tmp);
@@ -339,19 +347,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $input_errors[] = sprintf(gettext("The Source IP address %s Address Family differs from the destination %s."), $pconfig['src'], $pconfig['dst']);
         }
     }
-    foreach (array('src', 'dst') as $fam) {
-        if (is_ipaddr($pconfig[$fam])) {
-            if ((is_ipaddrv6($pconfig[$fam]) || is_subnetv6($pconfig[$fam])) && $pconfig['ipprotocol'] == "inet") {
-                $input_errors[] = gettext("You can not use IPv6 addresses in IPv4 rules.");
-            } elseif ((is_ipaddrv4($pconfig[$fam]) || is_subnetv4($pconfig[$fam])) && $pconfig['ipprotocol'] == "inet6") {
-                $input_errors[] = gettext("You can not use IPv4 addresses in IPv6 rules.");
-            }
+
+    foreach (['src', 'dst'] as $fam) {
+        /* do not validate the subnet as the concern is address family validation */
+        $testip = explode('/', $pconfig[$fam])[0];
+        if (strpbrk($testip, '.:') === false) {
+            continue; /* does not look like an IP adress */
+        }
+
+        if ($pconfig['ipprotocol'] == 'inet' && is_ipaddrv6($testip)) {
+            $input_errors[] = gettext('You can not use IPv6 addresses in IPv4 rules.');
+            break; /* break early to avoid multiple of the same message */
+        } elseif ($pconfig['ipprotocol'] == 'inet6' && is_ipaddrv4($testip)) {
+            $input_errors[] = gettext('You can not use IPv4 addresses in IPv6 rules.');
+            break; /* break early to avoid multiple of the same message */
+        } elseif ($pconfig['ipprotocol'] == 'inet46' && is_ipaddr($testip)) {
+            $input_errors[] = gettext('You can not use an IPv4 or IPv6 address in combined IPv4 + IPv6 rules.');
+            break; /* break early to avoid multiple of the same message */
         }
     }
 
-    if ((is_ipaddr($pconfig['src']) || is_ipaddr($pconfig['dst'])) && ($pconfig['ipprotocol'] == "inet46")) {
-        $input_errors[] = gettext('You can not use an IPv4 or IPv6 address in combined IPv4 + IPv6 rules.');
-    }
     if (!empty($pconfig['os'])) {
         if ($pconfig['protocol'] != "tcp") {
             $input_errors[] = gettext("OS detection is only valid with protocol tcp.");
@@ -602,7 +617,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
 
         if ($pconfig['protocol'] == "icmp" && !empty($pconfig['icmptype'])) {
-            $filterent['icmptype'] = $pconfig['icmptype'];
+            $filterent['icmptype'] = implode(',', $pconfig['icmptype']);
         } elseif ($pconfig['protocol'] == 'ipv6-icmp' && !empty($pconfig['icmp6-type'])) {
             $filterent['icmp6-type'] = $pconfig['icmp6-type'];
         }
@@ -1047,10 +1062,9 @@ include("head.inc");
                   <tr id="icmpbox">
                     <td><a id="help_for_icmptype" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("ICMP type");?></td>
                     <td>
-                      <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="icmptype" class="selectpicker" data-live-search="true" data-size="5" >
+                      <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="icmptype[]" class="selectpicker" title="<?=gettext("Any");?>" data-live-search="true" data-size="5" multiple="multiple">
 <?php
                       $icmptypes = array(
-                      "" => gettext("any"),
                       "echoreq" => gettext("Echo Request"),
                       "echorep" => gettext("Echo Reply"),
                       "unreach" => gettext("Destination Unreachable"),
@@ -1070,7 +1084,7 @@ include("head.inc");
                       );
 
                       foreach ($icmptypes as $icmptype => $descr): ?>
-                        <option value="<?=$icmptype;?>" <?= $icmptype == $pconfig['icmptype'] ? "selected=\"selected\"" : ""; ?>>
+                        <option value="<?=$icmptype;?>" <?= in_array($icmptype, $pconfig['icmptype'] ?? []) ? "selected=\"selected\"" : ""; ?>>
                           <?=$descr;?>
                         </option>
 <?php

@@ -27,19 +27,19 @@
 
  <script>
     $( document ).ready(function() {
-        var data_get_map = {'frm_general_settings':"/api/wireguard/general/get"};
+        const data_get_map = {'frm_general_settings':"/api/wireguard/general/get"};
         mapDataToFormUI(data_get_map).done(function(data){
             formatTokenizersUI();
             $('.selectpicker').selectpicker('refresh');
         });
 
-        let grid_peers = $("#grid-peers").UIBootgrid({
-                search: '/api/wireguard/client/searchClient',
-                get: '/api/wireguard/client/getClient/',
-                set: '/api/wireguard/client/setClient/',
-                add: '/api/wireguard/client/addClient/',
-                del: '/api/wireguard/client/delClient/',
-                toggle: '/api/wireguard/client/toggleClient/',
+        const grid_peers = $("#{{formGridWireguardClient['table_id']}}").UIBootgrid({
+                search: '/api/wireguard/client/search_client',
+                get: '/api/wireguard/client/get_client/',
+                set: '/api/wireguard/client/set_client/',
+                add: '/api/wireguard/client/add_client/',
+                del: '/api/wireguard/client/del_client/',
+                toggle: '/api/wireguard/client/toggle_client/',
                 options:{
                     initialSearchPhrase: getUrlHash('search'),
                     requestHandler: function(request){
@@ -65,15 +65,14 @@
             }
         });
 
-        $("#grid-instances").UIBootgrid({
-            search: '/api/wireguard/server/searchServer',
-            get: '/api/wireguard/server/getServer/',
-            set: '/api/wireguard/server/setServer/',
-            add: '/api/wireguard/server/addServer/',
-            del: '/api/wireguard/server/delServer/',
-            toggle: '/api/wireguard/server/toggleServer/'
+        $("#{{formGridWireguardServer['table_id']}}").UIBootgrid({
+            search: '/api/wireguard/server/search_server',
+            get: '/api/wireguard/server/get_server/',
+            set: '/api/wireguard/server/set_server/',
+            add: '/api/wireguard/server/add_server/',
+            del: '/api/wireguard/server/del_server/',
+            toggle: '/api/wireguard/server/toggle_server/'
         });
-
 
         $("#reconfigureAct").SimpleActionButton({
             onPreAction: function() {
@@ -109,9 +108,9 @@
         /**
          * Quick instance filter on top
          */
-        $("#filter_container").detach().prependTo('#grid-peers-header > .row > .actionBar > .actions');
+        $("#filter_container").detach().insertAfter('#{{formGridWireguardClient["table_id"]}}-header .search');
         $("#server_filter").change(function(){
-            $('#grid-peers').bootgrid('reload');
+            $('#{{formGridWireguardClient['table_id']}}').bootgrid('reload');
         });
 
         /**
@@ -171,7 +170,7 @@
                     endpoint: endpoint.val()
                 }
             };
-            ajaxCall('/api/wireguard/client/addClientBuilder', peer, function(data, status) {
+            ajaxCall('/api/wireguard/client/add_client_builder', peer, function(data, status) {
                 if (data.validations) {
                     if (data.validations['configbuilder.tunneladdress']) {
                         /*
@@ -190,7 +189,7 @@
                                 'peer_dns': peer_dns.val()
                             }
                         };
-                        ajaxCall('/api/wireguard/server/setServer/' + instance_id, param, function(data, status){
+                        ajaxCall('/api/wireguard/server/set_server/' + instance_id, param, function(data, status){
                             configbuilder_new();
                         });
                     } else {
@@ -250,7 +249,9 @@
             if (e.target.id == 'tab_configbuilder'){
                 configbuilder_new();
             } else if (e.target.id == 'tab_peers') {
-                $('#grid-peers').bootgrid('reload');
+                $('#{{formGridWireguardClient['table_id']}}').bootgrid('reload');
+            } else if (e.target.id == 'tab_instances') {
+                $('#{{formGridWireguardServer['table_id']}}').bootgrid('reload');
             }
         });
 
@@ -288,32 +289,7 @@
                 </select>
             </div>
         </div>
-
-        <table id="grid-peers" class="table table-condensed table-hover table-striped" data-editDialog="dialogEditWireguardClient">
-            <thead>
-                <tr>
-                    <th data-column-id="uuid" data-type="string" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
-                    <th data-column-id="enabled" data-type="string" data-formatter="rowtoggle">{{ lang._('Enabled') }}</th>
-                    <th data-column-id="name" data-type="string" data-visible="true">{{ lang._('Name') }}</th>
-                    <th data-column-id="serveraddress" data-type="string" data-visible="true">{{ lang._('Endpoint address') }}</th>
-                    <th data-column-id="serverport" data-type="string" data-visible="true">{{ lang._('Endpoint port') }}</th>
-                    <th data-column-id="tunneladdress" data-type="string" data-visible="true">{{ lang._('Allowed IPs') }}</th>
-                    <th data-column-id="servers" data-type="string" data-visible="true">{{ lang._('Instances') }}</th>
-                    <th data-column-id="commands" data-formatter="commands" data-sortable="false">{{ lang._('Commands') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="6"></td>
-                    <td>
-                        <button data-action="add" type="button" class="btn btn-xs btn-primary"><span class="fa fa-plus"></span></button>
-                        <button data-action="deleteSelected" type="button" class="btn btn-xs btn-default"><span class="fa fa-fw fa-trash-o"></span></button>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
+        {{ partial('layout_partials/base_bootgrid_table', formGridWireguardClient)}}
     </div>
     <div id="instances" class="tab-pane fade in active">
         <span id="keygen_div" style="display:none" class="pull-right">
@@ -321,31 +297,7 @@
               <i class="fa fa-fw fa-gear"></i>
             </button>
         </span>
-        <table id="grid-instances" class="table table-condensed table-hover table-striped" data-editDialog="dialogEditWireguardServer">
-            <thead>
-                <tr>
-                    <th data-column-id="uuid" data-type="string" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
-                    <th data-column-id="enabled" data-type="string" data-formatter="rowtoggle">{{ lang._('Enabled') }}</th>
-                    <th data-column-id="name" data-type="string" data-visible="true">{{ lang._('Name') }}</th>
-                    <th data-column-id="interface" data-type="string" data-visible="true">{{ lang._('Device') }}</th>
-                    <th data-column-id="tunneladdress" data-type="string" data-visible="true">{{ lang._('Tunnel Address') }}</th>
-                    <th data-column-id="port" data-type="string" data-visible="true">{{ lang._('Port') }}</th>
-                    <th data-column-id="peers" data-type="string" data-visible="true">{{ lang._('Peers') }}</th>
-                    <th data-column-id="commands" data-formatter="commands" data-sortable="false">{{ lang._('Commands') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="7"></td>
-                    <td>
-                        <button data-action="add" type="button" class="btn btn-xs btn-primary"><span class="fa fa-plus"></span></button>
-                        <button data-action="deleteSelected" type="button" class="btn btn-xs btn-default"><span class="fa fa-fw fa-trash-o"></span></button>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
+        {{ partial('layout_partials/base_bootgrid_table', formGridWireguardServer)}}
     </div>
     <div id="configbuilder" class="tab-pane fade in">
         <span id="pskgen_cb_div" style="display:none" class="pull-right">
@@ -360,19 +312,8 @@
         </span>
         {{ partial("layout_partials/base_form",['fields':formDialogConfigBuilder,'id':'frm_config_builder'])}}
     </div>
+    {{ partial("layout_partials/base_form",['fields':generalForm,'id':'frm_general_settings'])}}
 </div>
-
-<section class="page-content-main">
-    <div class="content-box">
-        {{ partial("layout_partials/base_form",['fields':generalForm,'id':'frm_general_settings'])}}
-        <button class="btn btn-primary __mt __mb __ml" id="reconfigureAct"
-            data-endpoint='/api/wireguard/service/reconfigure'
-            data-label="{{ lang._('Apply') }}"
-            data-error-title="{{ lang._('Error reconfiguring WireGuard') }}"
-            type="button"
-        ></button>
-    </div>
-</section>
-
-{{ partial("layout_partials/base_dialog",['fields':formDialogEditWireguardClient,'id':'dialogEditWireguardClient','label':lang._('Edit peer')])}}
-{{ partial("layout_partials/base_dialog",['fields':formDialogEditWireguardServer,'id':'dialogEditWireguardServer','label':lang._('Edit instance')])}}
+{{ partial('layout_partials/base_apply_button', {'data_endpoint': '/api/wireguard/service/reconfigure'}) }}
+{{ partial("layout_partials/base_dialog",['fields':formDialogEditWireguardClient,'id':formGridWireguardClient['edit_dialog_id'],'label':lang._('Edit peer')])}}
+{{ partial("layout_partials/base_dialog",['fields':formDialogEditWireguardServer,'id':formGridWireguardServer['edit_dialog_id'],'label':lang._('Edit instance')])}}

@@ -8,6 +8,7 @@
         <label>Disable preempt</label>
         <type>checkbox</type>
         <help>When this device is configured as CARP master it will try to switch to master when powering up, this option will keep this one slave if there already is a master on the network. A reboot is required to take effect.</help>
+        <advanced>true</advanced>
     </field>
     <field>
         <id>hasync.disconnectppps</id>
@@ -36,6 +37,13 @@
         <type>text</type>
         <hint>224.0.0.240</hint>
         <help>Setting this option will force pfsync to synchronize its state table to this IP address. The default is directed multicast.</help>
+    </field>
+    <field>
+        <id>hasync.pfsyncdefer</id>
+        <label>Defer pfsync</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Defer transmission of the first packet in a state until a peer has acknowledged that the associated state has been inserted. This adds small delays but allows traffic to flow when more than one firewall might actively handle packets ("active/active")</help>
     </field>
     <field>
         <type>header</type>
